@@ -43,7 +43,7 @@ public class TrajPoint {
 
     @Override
     public String toString() {
-        return "TrajPoint{" + "Coordinate = " + pointLocation + " , timestamp =" + timeInSec + '}';
+        return "TrajPoint{" + "Coordinate = " + pointLocation + " , timestamp = " + timeInSec + '}';
     }
     
     

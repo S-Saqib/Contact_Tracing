@@ -65,7 +65,7 @@ public class TQIndex {
         qNodeToAnonymizedTrajIdsMap = new HashMap<Node, ArrayList<String>>();
         qNodeToNextLevelIndexMap = new HashMap<Node, QuadTree>();
         
-        quadTree = new QuadTree(0.0, 0.0, 100.0, 100.0);    // since trajectories are already normalized in this range
+        quadTree = new QuadTree(trajStorage, 0.0, 0.0, 100.0, 100.0);    // since trajectories are already normalized in this range
         
         // now read data in chunks and build the first level quadtree
         ArrayList<Trajectory> trajectories = this.trajStorage.getNextChunkAsList();
@@ -73,11 +73,12 @@ public class TQIndex {
             for (Trajectory trajectory : trajectories) {
                 TreeSet <TrajPoint> trajPointList = trajectory.getPointList();
                 int pointCount = 0;
-                long trajId = trajectory.getUserId();
+                // long trajId = trajectory.getUserId();
+                String anonymizedTrajId = trajectory.getAnonymizedId();
                 for (TrajPoint trajPoint: trajPointList) {
                     Coordinate trajPointLocation = trajPoint.getPointLocation();
                     long trajPointTimeInSec = trajPoint.getTimeInSec();
-                    quadTree.set(trajPointLocation.x, trajPointLocation.y, trajPointTimeInSec, new Integer(pointCount++), new Long(trajId));
+                    quadTree.set(trajPointLocation.x, trajPointLocation.y, trajPointTimeInSec, new Integer(pointCount++), new String(anonymizedTrajId));
                 }
             }
             trajectories = this.trajStorage.getNextChunkAsList();
@@ -97,7 +98,7 @@ public class TQIndex {
             
             if (!qNodeToAnonymizedTrajIdsMap.containsKey(node)) {
                 qNodeToAnonymizedTrajIdsMap.put(node, new ArrayList<String>());
-                qNodeToNextLevelIndexMap.put(node, new QuadTree(node.getX(), node.getY(), node.getX() + node.getW(), node.getY() + node.getH()));
+                qNodeToNextLevelIndexMap.put(node, new QuadTree(trajStorage, node.getX(), node.getY(), node.getX() + node.getW(), node.getY() + node.getH()));
             }
             String anonymizedTrajId = trajectory.getAnonymizedId();
             qNodeToAnonymizedTrajIdsMap.get(node).add(anonymizedTrajId);

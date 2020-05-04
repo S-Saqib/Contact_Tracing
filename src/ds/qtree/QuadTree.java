@@ -1,5 +1,6 @@
 package ds.qtree;
 
+import db.TrajStorage;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -20,6 +21,7 @@ public class QuadTree {
     private int nodeCount;
     private long zCode;
     private int height;
+    private TrajStorage trajStorage;
 
     /**
      * Constructs a new quad tree.
@@ -29,11 +31,12 @@ public class QuadTree {
      * @param {double} maxX Maximum x-value that can be held in tree.
      * @param {double} maxY Maximum y-value that can be held in tree.
      */
-    public QuadTree(double minX, double minY, double maxX, double maxY) {
+    public QuadTree(TrajStorage trajStorage, double minX, double minY, double maxX, double maxY) {
         count_ = 0;
         nodeCount = 1;
         zCode = 0;
         height = 0;
+        this.trajStorage = trajStorage;
         this.root_ = new Node(minX, minY, maxX - minX, maxY - minY, null, this.zCode, 0);
         //System.out.println("Constructor Called");
     }
@@ -255,7 +258,7 @@ public class QuadTree {
         double y1 = this.root_.getY();
         double x2 = x1 + this.root_.getW();
         double y2 = y1 + this.root_.getH();
-        final QuadTree clone = new QuadTree(x1, y1, x2, y2);
+        final QuadTree clone = new QuadTree(new TrajStorage(trajStorage.getTrajData()), x1, y1, x2, y2);
         // This is inefficient as the clone needs to recalculate the structure of the
         // tree, even though we know it already.  But this is easier and can be
         // optimized when/if needed.
@@ -349,6 +352,7 @@ public class QuadTree {
                 result = 0;
                 break;
             case LEAF:
+                
                 for (Point pt: parent.getPoints()){
                     if (pt.getX() == point.getX() && pt.getY() == point.getY()) {
                         //this.setPointForNode(parent, point);

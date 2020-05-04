@@ -14,7 +14,7 @@ import java.util.HashMap;
  * @author Saqib
  */
 public class TrajStorage {
-    HashMap<String, Trajectory> trajData;
+    private HashMap<String, Trajectory> trajData;
     private final int chunkSize;
     private int cursor;
     

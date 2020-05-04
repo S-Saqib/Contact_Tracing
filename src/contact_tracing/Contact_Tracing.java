@@ -31,7 +31,7 @@ public class Contact_Tracing {
      */
     public static void main(String[] args) throws IOException, FileNotFoundException, ParseException {
         
-        String userTrajectoryFilePath = "../Data/sample_4.txt";
+        String userTrajectoryFilePath = "../Data/sample_1.txt";
         
         // parse, preprocess and normalize trajectory data
         TrajParser trajParser = new TrajParser();
@@ -52,20 +52,20 @@ public class Contact_Tracing {
         quadTrajTree.draw();
         
         // calculating spatial proximity
-        double spatialProximity = 1; // in feet, should be around 13 for example
+        double spatialProximity = 5; // in feet, should be around 13 for example
         String proximityUnit = "km"; // it can be "m", "km", "mile" and "ft"
         DistanceConverter distanceConverter = new DistanceConverter(trajParser.getMaxLon(), trajParser.getMaxLat(), trajParser.getMinLon(), trajParser.getMinLat());
         double latProximity = distanceConverter.getLatProximity(spatialProximity, proximityUnit);
         double lonProximity = distanceConverter.getLonProximity(spatialProximity, proximityUnit);
         System.out.println(latProximity + " and " + lonProximity);
         
-        long temporalProximity = 10; // in minutes, may be anything around 5 to 240 for example
+        long temporalProximity = 30; // in minutes, may be anything around 5 to 240 for example
         temporalProximity *= 60;    // in seconds
         
         ArrayList <Trajectory> facilityGraph = new ArrayList<Trajectory>();
         // The following trajectory will be received as input
-        facilityGraph.add(trajStorage.getTrajectoryById("AAH03JACmAAEbrSAqN"));
-        // facilityGraph.add(trajStorage.getTrajectoryById(trajStorage.getTrajDataAsList().get(0).getAnonymizedId()));
+        // facilityGraph.add(trajStorage.getTrajectoryById("AAH03JACmAAEbrSAqN"));
+        facilityGraph.add(trajStorage.getTrajectoryById(trajStorage.getTrajDataAsList().get(0).getAnonymizedId()));
         //System.out.println(facilityGraph.get(0).getPointList().size());
         TestServiceQuery.run(quadTrajTree, facilityGraph, latProximity, lonProximity, temporalProximity);
     }
