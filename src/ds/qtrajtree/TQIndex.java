@@ -107,7 +107,7 @@ public class TQIndex {
                 double trajPointX = trajPoint.getPointLocation().x;
                 double trajPointY = trajPoint.getPointLocation().y;
                 long trajPointTimeInSec = trajPoint.getTimeInSec();
-                qNodeToNextLevelIndexMap.get(node).set(trajPointX, trajPointY, trajPointTimeInSec, new Integer(pointCount++), new String(anonymizedTrajId));
+                qNodeToNextLevelIndexMap.get(node).set(trajPointX, trajPointY, trajPointTimeInSec, new Integer(pointCount++), anonymizedTrajId);
             }
         }
     }

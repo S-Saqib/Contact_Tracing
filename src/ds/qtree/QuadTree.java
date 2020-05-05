@@ -22,7 +22,7 @@ public class QuadTree {
     private long zCode;
     private int height;
     private TrajStorage trajStorage;
-
+    
     /**
      * Constructs a new quad tree.
      *
@@ -68,7 +68,6 @@ public class QuadTree {
         if (splitCount >= 0) {
             this.count_++;
         }
-        
         return splitCount;
     }
 
@@ -201,6 +200,7 @@ public class QuadTree {
                         // Definitely not within the polygon!
                     } else {
                         arr.add(node);
+                        break;
                     }
                 }
             }
@@ -229,25 +229,25 @@ public class QuadTree {
                 break;
 
             case POINTER:
-                if (intersects(xmin, ymax, xmax, ymin, node.getNe()))
+                if (intersects(xmin, ymin, xmax, ymax, node.getNe()))
                     this.navigate(node.getNe(), func, xmin, ymin, xmax, ymax);
-                if (intersects(xmin, ymax, xmax, ymin, node.getSe()))
+                if (intersects(xmin, ymin, xmax, ymax, node.getSe()))
                     this.navigate(node.getSe(), func, xmin, ymin, xmax, ymax);
-                if (intersects(xmin, ymax, xmax, ymin, node.getSw()))
+                if (intersects(xmin, ymin, xmax, ymax, node.getSw()))
                     this.navigate(node.getSw(), func, xmin, ymin, xmax, ymax);
-                if (intersects(xmin, ymax, xmax, ymin, node.getNw()))
+                if (intersects(xmin, ymin, xmax, ymax, node.getNw()))
                     this.navigate(node.getNw(), func, xmin, ymin, xmax, ymax);
                 break;
-		default:
-			break;
+            default:
+		break;
         }
     }
 
-    private boolean intersects(double left, double bottom, double right, double top, Node node) {
-        return !(node.getX() > right ||
-                (node.getX() + node.getW()) < left ||
-                node.getY() > bottom ||
-                (node.getY() + node.getH()) < top);
+    private boolean intersects(double minX, double minY, double maxX, double maxY, Node node) {
+        if (maxX < node.getX() || maxY < node.getY()) return false;
+        if (minX > node.getX() + node.getW()) return false;
+        if (minY > node.getY() + node.getH()) return false;
+        return true;
     }
     /**
      * Clones the quad-tree and returns the new instance.
@@ -352,18 +352,26 @@ public class QuadTree {
                 result = 0;
                 break;
             case LEAF:
-                
+                ArrayList<Point> parentPoints = new ArrayList<Point>(parent.getPoints());
                 for (Point pt: parent.getPoints()){
+                    if (pt.equals(point)) {
+                        result = -1;
+                        break;
+                    }
                     if (pt.getX() == point.getX() && pt.getY() == point.getY()) {
                         //this.setPointForNode(parent, point);
-                        result = -1;    // indicates found
-                        break;
+                        result = -2;    // indicates same spatial point found
                     }
                 }
                 if (result != -1) {
-                    if (!parent.hasSpaceForPoint()){
+                    if (result == -2){
+                        this.setPointForNode(parent, point);
+                        result = 0;
+                    }
+                    else if (!parent.hasSpaceForPoint()){
                         //System.out.println("Trouble!!");
                         this.split(parent);
+                        // now parent has node type pointer
                         this.insert(parent, point);
                         result = 1;
                     }
@@ -527,6 +535,7 @@ public class QuadTree {
      */
     private void setPointForNode(Node node, Point point) {
         if (node.getNodeType() == NodeType.POINTER) {
+            System.out.println("Can not set point for node of type POINTER for node " + node);
             throw new QuadTreeException("Can not set point for node of type POINTER");
         }
         node.setNodeType(NodeType.LEAF);

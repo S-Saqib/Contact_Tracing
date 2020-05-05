@@ -73,6 +73,7 @@ public class ServiceQueryProcessor {
         }
         
         HashMap <String, TreeSet<TrajPoint>> newContactInfo = evaluateNodeTraj(qNode, facilityQuery, contactInfo);
+        
         if (newContactInfo != null) {
             for (HashMap.Entry<String, TreeSet<TrajPoint>> entry : newContactInfo.entrySet()) {
                 String trajId = entry.getKey();
@@ -120,7 +121,7 @@ public class ServiceQueryProcessor {
     private ArrayList<Trajectory> clipGraph(Node node, ArrayList<Trajectory> facilityQuery) {
         ArrayList<Trajectory> clippedSubgraphs = new ArrayList<Trajectory>();
         for (Trajectory trajectory : facilityQuery){
-            Trajectory clippedFacility = new Trajectory();
+            Trajectory clippedFacility = new Trajectory(trajectory.getAnonymizedId(), trajectory.getUserId());
             for (TrajPoint trajPoint : trajectory.getPointList()){
                 if (containsExtended(node, trajPoint)){
                     clippedFacility.addTrajPoint(trajPoint);
@@ -179,10 +180,9 @@ public class ServiceQueryProcessor {
                         }
                         // spatial matching: checking if eucliean distance is within spatialDistanceThreshold
                         double checkX = point.getX();
-                        double checkY = point.getX();
+                        double checkY = point.getY();
                         // need to calculate geodesic distance here
                         double euclideanDistance = Math.sqrt(Math.pow((x - checkX), 2) + Math.pow((y - checkY), 2));
-                        
                         if (euclideanDistance <= (latDisThreshold+lonDisThreshold)/2){
                             double checkT = point.getTimeInSec();
                             // temporal matching: checkT should be in [t, t+temporalDistanceThreshold] window for a contact to be affected
