@@ -1,5 +1,6 @@
 package ds.transformed_trajectory;
 
+import com.github.davidmoten.rtreemulti.geometry.Rectangle;
 import java.util.ArrayList;
 
 import java.util.TreeSet;
@@ -7,6 +8,7 @@ import java.util.TreeSet;
 public class TransformedTrajectory {
     
     private TreeSet<TransformedTrajPoint> transformedPointList;
+    private Rectangle envelope;
     private long userId;
     private String anonymizedId;
     private String contactNo;
@@ -75,6 +77,27 @@ public class TransformedTrajectory {
     public boolean contains(TransformedTrajPoint p){
         return transformedPointList.contains(p);
     }
+
+    public void setEnvelope() {
+        double minQnodeIndex, maxQnodeIndex, minTimeIndex, maxTimeIndex;
+        minQnodeIndex = minTimeIndex = Double.MAX_VALUE;
+        maxQnodeIndex = maxTimeIndex = Double.MIN_VALUE;
+        for (TransformedTrajPoint p: this.transformedPointList){
+            minQnodeIndex = Math.min(minQnodeIndex, p.getqNodeIndex());
+            maxQnodeIndex = Math.max(maxQnodeIndex, p.getqNodeIndex());
+            minTimeIndex = Math.min(minTimeIndex, p.getTimeIndex());
+            maxTimeIndex = Math.max(maxTimeIndex, p.getTimeIndex());
+        } 
+        double[] mins = new double[]{minQnodeIndex, minTimeIndex};
+        double[] maxes = new double[]{maxQnodeIndex, maxTimeIndex};
+        this.envelope = Rectangle.create(mins, maxes);
+    }
+
+    public Rectangle getEnvelope() {
+        return envelope;
+    }
+    
+    
 
     @Override
     public String toString() {

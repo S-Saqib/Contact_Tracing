@@ -24,10 +24,12 @@ public class Rtree {
 
     public Rtree(HashMap<String, TransformedTrajectory> transformedTrajectories) {
         this.transformedTrajectories = transformedTrajectories;
+        this.tree = RTree.star().dimensions(2).create();
+        
         transformedTrajectories.entrySet().forEach((entry) -> {
             TransformedTrajectory traj = entry.getValue();
             traj.setEnvelope();
-            tree = tree.add(entry.getKey(), traj.getEnvelope());
+            this.tree = this.tree.add(entry.getKey(), traj.getEnvelope());
         });
     }
     
