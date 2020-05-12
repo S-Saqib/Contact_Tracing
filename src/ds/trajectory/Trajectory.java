@@ -1,9 +1,5 @@
 package ds.trajectory;
 
-import java.util.ArrayList;
-
-import com.vividsolutions.jts.geom.impl.CoordinateArraySequence;
-import java.util.Set;
 import java.util.TreeSet;
 
 public class Trajectory {

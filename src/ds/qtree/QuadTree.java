@@ -1,7 +1,10 @@
 package ds.qtree;
 
 import db.TrajStorage;
+import ds.transformed_trajectory.TransformedTrajPoint;
+import ds.transformed_trajectory.TransformedTrajectory;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import javax.xml.ws.Response;
@@ -22,6 +25,8 @@ public class QuadTree {
     private long zCode;
     private int height;
     private TrajStorage trajStorage;
+    private long minTimeInSec;
+    private int timeWindowInSec;
     
     /**
      * Constructs a new quad tree.
@@ -31,14 +36,15 @@ public class QuadTree {
      * @param {double} maxX Maximum x-value that can be held in tree.
      * @param {double} maxY Maximum y-value that can be held in tree.
      */
-    public QuadTree(TrajStorage trajStorage, double minX, double minY, double maxX, double maxY) {
+    public QuadTree(TrajStorage trajStorage, double minX, double minY, double maxX, double maxY, long minTimeInSec, int timeWindowInSec) {
         count_ = 0;
         nodeCount = 1;
         zCode = 0;
         height = 0;
         this.trajStorage = trajStorage;
-        this.root_ = new Node(minX, minY, maxX - minX, maxY - minY, null, this.zCode, 0);
-        //System.out.println("Constructor Called");
+        this.root_ = new Node(minX, minY, maxX - minX, maxY - minY, null, 0);
+        this.minTimeInSec = minTimeInSec;
+        this.timeWindowInSec = timeWindowInSec;
     }
 
     /**
@@ -82,45 +88,6 @@ public class QuadTree {
      *         doesn't exist, or undefined if the node doesn't exist and no default
      *         has been provided.
      */
-    public Object get(double x, double y, Object opt_default) {
-        Node node = this.find(this.root_, x, y);
-        //return node != null ? node.getPoint().getValue() : opt_default;
-        return node != null ? node.getPoints() : opt_default;
-    }
-
-    /**
-     * Removes a point from (x, y) if it exists.
-     *
-     * @param {double} x The x-coordinate.
-     * @param {double} y The y-coordinate.
-     * @return {Object} The value of the node that was removed, or null if the
-     *         node doesn't exist.
-     */
-    public Object remove(double x, double y) {
-        Node node = this.find(this.root_, x, y);
-        if (node != null) {
-            // a node which contains the point is found
-            Object value = node.removePoint(x, y);
-            boolean isEmpty = node.isEmpty();
-            if (isEmpty) node.setNodeType(NodeType.EMPTY);
-            this.balance(node);
-            this.count_--;
-            return value;
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * Returns true if the point at (x, y) exists in the tree.
-     *
-     * @param {double} x The x-coordinate.
-     * @param {double} y The y-coordinate.
-     * @return {boolean} Whether the tree contains a point at (x, y).
-     */
-    public boolean contains(double x, double y) {
-        return this.get(x, y, null) != null;
-    }
 
     /**
      * @return {boolean} Whether the tree is empty.
@@ -153,7 +120,9 @@ public class QuadTree {
         this.root_.setSw(null);
         this.root_.setSe(null);
         this.root_.setNodeType(NodeType.EMPTY);
-        this.root_.setPoints(null);
+        this.root_.clearTimeBucketToDiskBlockIdMap();
+        this.root_.setPointCount(0);
+        this.trajStorage.clearQNodeToPointListMap();
         this.count_ = 0;
     }
 
@@ -165,7 +134,7 @@ public class QuadTree {
         final List<Point> arr = new ArrayList<Point>();
         this.traverse(this.root_, new Func() {
             public void call(QuadTree quadTree, Node node) {
-                for (Point point : node.getPoints()){
+                for (Point point : trajStorage.getPointsFromQNode(node)){
                     arr.add(point);
                 }
             }
@@ -181,7 +150,7 @@ public class QuadTree {
         final List<Object> arr = new ArrayList<Object>();
         this.traverse(this.root_, new Func() {
             public void call(QuadTree quadTree, Node node) {
-                for (Point point : node.getPoints()){
+                for (Point point : trajStorage.getPointsFromQNode(node)){
                     arr.add(point.getValue());
                 }
             }
@@ -194,8 +163,8 @@ public class QuadTree {
         final HashSet<Node> arr = new HashSet<Node>();
         this.navigate(this.root_, new Func() {
             public void call(QuadTree quadTree, Node node) {
-                // the following loop may be optimized if we need not check for all pointes separately by storing additional info
-                for (Point point: node.getPoints()){
+                // the following loop may be optimized if we can check node boundary only instead of all the points
+                for (Point point: trajStorage.getPointsFromQNode(node)){
                     if (point.getX() < xmin || point.getX() > xmax || point.getY() < ymin || point.getY() > ymax) {
                         // Definitely not within the polygon!
                     } else {
@@ -212,7 +181,8 @@ public class QuadTree {
         final List<Point> arr = new ArrayList<Point>();
         this.navigate(this.root_, new Func() {
             public void call(QuadTree quadTree, Node node) {
-                for (Point point: node.getPoints()){
+                // the following loop may be optimized if we can check node boundary only instead of all the points
+                for (Point point: trajStorage.getPointsFromQNode(node)){
                     if (point.getX() > xmin && point.getX() < xmax && point.getY() > ymin && point.getY() < ymax) {
                         arr.add(point);
                     }
@@ -258,13 +228,13 @@ public class QuadTree {
         double y1 = this.root_.getY();
         double x2 = x1 + this.root_.getW();
         double y2 = y1 + this.root_.getH();
-        final QuadTree clone = new QuadTree(new TrajStorage(trajStorage.getTrajData()), x1, y1, x2, y2);
+        final QuadTree clone = new QuadTree(new TrajStorage(trajStorage.getTrajData()), x1, y1, x2, y2, this.minTimeInSec, this.timeWindowInSec);
         // This is inefficient as the clone needs to recalculate the structure of the
         // tree, even though we know it already.  But this is easier and can be
         // optimized when/if needed.
         this.traverse(this.root_, new Func() {
             public void call(QuadTree quadTree, Node node) {
-                for (Point point: node.getPoints()){
+                for (Point point: trajStorage.getPointsFromQNode(node)){
                     clone.set(point.getX(), point.getY(), point.getTimeInSec(), point.getValue(), point.getTraj_id());
                 }
             }
@@ -316,7 +286,7 @@ public class QuadTree {
                 break;
 
             case LEAF:
-                for (Point point: node.getPoints()){
+                for (Point point: trajStorage.getPointsFromQNode(node)){
                     if (point.getX() == x && point.getY() == y){
                         response = node;
                         break;
@@ -348,12 +318,12 @@ public class QuadTree {
         int result = 0;
         switch (parent.getNodeType()) {
             case EMPTY:
-                this.setPointForNode(parent, point);
+                this.addPointToNode(parent, point);
                 result = 0;
                 break;
             case LEAF:
-                ArrayList<Point> parentPoints = new ArrayList<Point>(parent.getPoints());
-                for (Point pt: parent.getPoints()){
+                ArrayList<Point> parentPoints = new ArrayList<Point>(trajStorage.getPointsFromQNode(parent));
+                for (Point pt: parentPoints){
                     if (pt.equals(point)) {
                         result = -1;
                         break;
@@ -365,7 +335,7 @@ public class QuadTree {
                 }
                 if (result != -1) {
                     if (result == -2){
-                        this.setPointForNode(parent, point);
+                        this.addPointToNode(parent, point);
                         result = 0;
                     }
                     else if (!parent.hasSpaceForPoint()){
@@ -377,7 +347,7 @@ public class QuadTree {
                     }
                     else{
                         //System.out.println("Cool!!");
-                        this.setPointForNode(parent, point);
+                        this.addPointToNode(parent, point);
                     }
                 }
                 else{
@@ -401,14 +371,11 @@ public class QuadTree {
      * @private
      */
     private void split(Node node) {
-        ArrayList <Point> oldPoints = new ArrayList<Point>(node.getPoints());
-        node.setPoints(null);
+        ArrayList <Point> oldPoints = trajStorage.getPointsFromQNode(node);
 
         node.setNodeType(NodeType.POINTER);
-        
-        long zCode = node.getZCode();
-        //node.setZCode(-1);  // since this node has children, numbering it is not necessary as no point in this node
-        long lastChildZCode = 4*(zCode+1);
+        trajStorage.removePointListFromQNode(node);
+        node.setPointCount(0);
         
         double x = node.getX();
         double y = node.getY();
@@ -418,93 +385,16 @@ public class QuadTree {
         int childDepth = node.getDepth() + 1;
         height = Integer.max(height, childDepth);
 
-        node.setNw(new Node(x, y, hw, hh, node, lastChildZCode-3, childDepth));
-        node.setNe(new Node(x + hw, y, hw, hh, node, lastChildZCode-2, childDepth));
-        node.setSw(new Node(x, y + hh, hw, hh, node, lastChildZCode-1, childDepth));
-        node.setSe(new Node(x + hw, y + hh, hw, hh, node, lastChildZCode, childDepth));
+        node.setNw(new Node(x, y, hw, hh, node, childDepth));
+        node.setNe(new Node(x + hw, y, hw, hh, node, childDepth));
+        node.setSw(new Node(x, y + hh, hw, hh, node, childDepth));
+        node.setSe(new Node(x + hw, y + hh, hw, hh, node, childDepth));
 
         for (Point point: oldPoints){
             this.insert(node, point);
         }
         
         this.nodeCount += 4;
-    }
-
-    /**
-     * Attempts to balance a node. A node will need balancing if all its children
-     * are empty or it contains just one leaf.
-     * @param {QuadTree.Node} node The node to balance.
-     * @private
-     */
-    private void balance(Node node) {
-        switch (node.getNodeType()) {
-            case EMPTY:
-            case LEAF:
-                if (node.getParent() != null) {
-                    this.balance(node.getParent());
-                }
-                break;
-
-            case POINTER: {
-                Node nw = node.getNw();
-                Node ne = node.getNe();
-                Node sw = node.getSw();
-                Node se = node.getSe();
-                Node firstLeaf = null;
-
-                // Look for the first non-empty child, if there is more than one then we
-                // break as this node can't be balanced.
-                if (nw.getNodeType() != NodeType.EMPTY) {
-                    firstLeaf = nw;
-                }
-                if (ne.getNodeType() != NodeType.EMPTY) {
-                    if (firstLeaf != null) {
-                        break;
-                    }
-                    firstLeaf = ne;
-                }
-                if (sw.getNodeType() != NodeType.EMPTY) {
-                    if (firstLeaf != null) {
-                        break;
-                    }
-                    firstLeaf = sw;
-                }
-                if (se.getNodeType() != NodeType.EMPTY) {
-                    if (firstLeaf != null) {
-                        break;
-                    }
-                    firstLeaf = se;
-                }
-
-                if (firstLeaf == null) {
-                    // All child nodes are empty: so make this node empty.
-                    node.setNodeType(NodeType.EMPTY);
-                    node.setNw(null);
-                    node.setNe(null);
-                    node.setSw(null);
-                    node.setSe(null);
-
-                } else if (firstLeaf.getNodeType() == NodeType.POINTER) {
-                    // Only child was a pointer, therefore we can't rebalance.
-                    break;
-
-                } else {
-                    // Only child was a leaf: so update node's point and make it a leaf.
-                    node.setNodeType(NodeType.LEAF);
-                    node.setNw(null);
-                    node.setNe(null);
-                    node.setSw(null);
-                    node.setSe(null);
-                    node.setPoints(firstLeaf.getPoints());
-                }
-
-                // Try and balance the parent as well.
-                if (node.getParent() != null) {
-                    this.balance(node.getParent());
-                }
-            }
-            break;
-        }
     }
 
     /**
@@ -533,15 +423,89 @@ public class QuadTree {
      * @param {QuadTree.Point} point The point to set.
      * @private
      */
-    private void setPointForNode(Node node, Point point) {
+    private void addPointToNode(Node node, Point point) {
         if (node.getNodeType() == NodeType.POINTER) {
             System.out.println("Can not set point for node of type POINTER for node " + node);
             throw new QuadTreeException("Can not set point for node of type POINTER");
         }
-        node.setNodeType(NodeType.LEAF);
-        ArrayList <Point> points= node.getPoints();
-        if (points == null) points = new ArrayList<Point>();
-        points.add(point);
-        node.setPoints(points);
+        if (node.getNodeType() != NodeType.LEAF) node.setNodeType(NodeType.LEAF);
+        // ArrayList <Point> points= node.getPoints();
+        // if (points == null) points = new ArrayList<Point>();
+        // points.add(point);
+        // node.setPoints(points);
+        trajStorage.addPointToQNode(node, point);
+        node.incPointCount();
     }
+    
+    private int getTimeIndex(long timeStamp){
+        if (timeStamp < minTimeInSec) return -1;
+        return (int)((timeStamp - minTimeInSec)/timeWindowInSec);
+    }
+    
+    // do not need to hit DB for the following mehtod
+    public long assignZCodesToLeaves(Node node, long zCode){
+        if (node.getNodeType() == NodeType.EMPTY){
+            // just added for safety, should not reach here
+            return zCode;
+        }
+        if (node.getNodeType() == NodeType.LEAF){
+            node.setZCode(zCode);
+            return zCode;
+        }
+        node.setZCode(-1);
+        zCode = assignZCodesToLeaves(node.getNw(), zCode) + 1;
+        zCode = assignZCodesToLeaves(node.getNe(), zCode) + 1;
+        zCode = assignZCodesToLeaves(node.getSw(), zCode) + 1;
+        zCode = assignZCodesToLeaves(node.getSe(), zCode) + 1;
+        return zCode;
+    }
+    
+    // saves transformed trajectories in trajStorage, the spatio-temporal transformation works on their points
+    public void transformTrajectories(Node node){
+        if (node.getNodeType() == NodeType.EMPTY){
+            // just added for safety, should not reach here
+            return;
+        }
+        if (node.getNodeType() == NodeType.LEAF){
+            ArrayList <Point> pointList = trajStorage.getPointsFromQNode(node);
+            for (Point point : pointList){
+                int timeIndex = getTimeIndex(point.getTimeInSec());
+                node.addTimeKey(timeIndex);
+                if (timeIndex > 0){
+                    long qNodeIndex = node.getZCode();
+                    TransformedTrajPoint transformedTrajPoint = new TransformedTrajPoint(qNodeIndex, timeIndex);
+                    String trajId = (String)point.getTraj_id();
+                    trajStorage.addValueToTransformedTrajData(trajId, transformedTrajPoint);
+                }
+            }
+            return;
+        }
+        transformTrajectories(node.getNw());
+        transformTrajectories(node.getNe());
+        transformTrajectories(node.getSw());
+        transformTrajectories(node.getSe());
+    }
+    
+    public void tagDiskBlockIdsToNodes(Node node){
+        if (node.getNodeType() == NodeType.EMPTY){
+            // just added for safety, should not reach here
+            return;
+        }
+        if (node.getNodeType() == NodeType.LEAF){
+            ArrayList <Point> pointList = trajStorage.getPointsFromQNode(node);
+            for (Point point : pointList){
+                int timeIndex = getTimeIndex(point.getTimeInSec());
+                if (timeIndex > 0){
+                    String trajId = (String)point.getTraj_id();
+                    Object diskBlockId = trajStorage.getDiskBlockIdByTrajId(trajId);
+                    node.addDiskBlockId(timeIndex, diskBlockId);
+                }
+            }
+        }
+        tagDiskBlockIdsToNodes(node.getNw());
+        tagDiskBlockIdsToNodes(node.getNe());
+        tagDiskBlockIdsToNodes(node.getSw());
+        tagDiskBlockIdsToNodes(node.getSe());
+    }
+    
 }

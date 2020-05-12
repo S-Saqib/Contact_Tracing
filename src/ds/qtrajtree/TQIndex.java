@@ -24,7 +24,6 @@ import java.util.TreeSet;
 
 public class TQIndex {
 
-    final double proximity;
     private final QuadTree quadTree;
     
     private final TrajStorage trajStorage;
@@ -45,9 +44,11 @@ public class TQIndex {
     // these coefficients and constants may be needed to get back the actual longitudes, latitudes of trajectories later
     private double latCoeff, latConst, lonCoeff, lonConst;
     private double maxLat, maxLon, minLat, minLon;
+    private long minTimeInSec;
+    private int timeWindowInSec;
     
-    public TQIndex(TrajStorage trajStorage, double latCoeff, double latConst, double lonCoeff, double lonConst, double maxLat, double maxLon, double minLat, double minLon) {
-        proximity = 0;    // need to recalculate
+    public TQIndex(TrajStorage trajStorage, double latCoeff, double latConst, double lonCoeff, double lonConst,
+                    double maxLat, double maxLon, double minLat, double minLon, long minTimeInSec, int timeWindowInSec) {
         
         this.trajStorage = trajStorage;
         
@@ -61,11 +62,14 @@ public class TQIndex {
         this.minLat = minLat;
         this.minLon = minLon;
         
+        this.minTimeInSec = minTimeInSec;
+        this.timeWindowInSec = timeWindowInSec;
+        
         qNodeTrajsCount = new HashMap<Node, Integer>();
         qNodeToAnonymizedTrajIdsMap = new HashMap<Node, ArrayList<String>>();
         qNodeToNextLevelIndexMap = new HashMap<Node, QuadTree>();
         
-        quadTree = new QuadTree(trajStorage, 0.0, 0.0, 100.0, 100.0);    // since trajectories are already normalized in this range
+        quadTree = new QuadTree(trajStorage, 0.0, 0.0, 100.0, 100.0, minTimeInSec, timeWindowInSec);    // since trajectories are already normalized in this range
         
         // now read data in chunks and build the first level quadtree
         ArrayList<Trajectory> trajectories = this.trajStorage.getNextChunkAsList();
@@ -84,12 +88,22 @@ public class TQIndex {
             trajectories = this.trajStorage.getNextChunkAsList();
         }
         
+        // assuming zCode starts from 0 (the second argument)
+        quadTree.assignZCodesToLeaves(quadTree.getRootNode(), 0);
+        quadTree.transformTrajectories(quadTree.getRootNode());
+        trajStorage.printTrajectories();
+        // the following will be done when we have the disk block ids in trajStorage
+        // trajStorage.assignBlockIds(rTree.getBlockIdsForTrajectories(trajStorage.trajStorage.getTransformedTrajDataAsList()));
+        // quadTree.tagDiskBlockIdsToNodes(quadTree.getRootNode());
+        
+        /* need to work on the following part for (Q^2)R tree
         // cursor set to beginning automatically, so reading next chunk will not return null
         trajectories = this.trajStorage.getNextChunkAsList();
         while(trajectories != null){
             addTrajectories(trajectories);
             trajectories = this.trajStorage.getNextChunkAsList();
         }
+        */
     }
     
     private void addTrajectories(ArrayList<Trajectory> trajectories) {
@@ -98,7 +112,8 @@ public class TQIndex {
             
             if (!qNodeToAnonymizedTrajIdsMap.containsKey(node)) {
                 qNodeToAnonymizedTrajIdsMap.put(node, new ArrayList<String>());
-                qNodeToNextLevelIndexMap.put(node, new QuadTree(trajStorage, node.getX(), node.getY(), node.getX() + node.getW(), node.getY() + node.getH()));
+                qNodeToNextLevelIndexMap.put(node, new QuadTree(trajStorage, node.getX(), node.getY(), node.getX() + node.getW(), node.getY() + node.getH(),
+                                                                minTimeInSec, timeWindowInSec));
             }
             String anonymizedTrajId = trajectory.getAnonymizedId();
             qNodeToAnonymizedTrajIdsMap.get(node).add(anonymizedTrajId);

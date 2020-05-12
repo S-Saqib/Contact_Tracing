@@ -191,7 +191,7 @@ public class ServiceQueryProcessor {
                                 if (!contactInfo.containsKey(infectedTrajId)){
                                     contactInfo.put((String)point.getTraj_id(), new TreeSet<TrajPoint>(new TrajPointComparator()));
                                 }
-                                contactInfo.get(infectedTrajId).add(trajPoint);
+                                contactInfo.get(infectedTrajId).add(point);
                             }
                         }
                     }

@@ -26,6 +26,7 @@ public class TrajParser {
 
     private double minLon, maxLon, minLat, maxLat, latCoeff, latConst, lonCoeff, lonConst;
     private final double  latLowerLimit, latUpperLimit, lonLowerLimit, lonUpperLimit;
+    private long minTimeInSec, maxTimeInSec;
     
     public TrajParser(){
         // the following variables are used in spatial normalization
@@ -42,6 +43,8 @@ public class TrajParser {
         lonLowerLimit = 88; // 88
         lonUpperLimit = 93; // 93
         // there may be some temporal noise which we do not know about, if there is, it should be cleaned as well
+        minTimeInSec = (long) 1e18;
+        maxTimeInSec = -1;
     }
     
     public HashMap<String, Trajectory> parseUserTrajectories(String path) throws FileNotFoundException, IOException, ParseException{
@@ -98,6 +101,13 @@ public class TrajParser {
                 maxLon = trajPointCoord.y;
             }
             
+            if (timeInSec < minTimeInSec){
+                minTimeInSec = timeInSec;
+            }
+            else if (timeInSec > maxTimeInSec){
+                maxTimeInSec = timeInSec;
+            }
+            
             // a point containing location and time is constructed from the recently processed values and inserted into the trajectory
             TrajPoint trajPoint = new TrajPoint(trajPointCoord, timeInSec);
             allTrajectories.get(anonymizedId).addTrajPoint(trajPoint);
@@ -147,6 +157,14 @@ public class TrajParser {
 
     public double getMaxLat() {
         return maxLat;
+    }
+
+    public long getMinTimeInSec() {
+        return minTimeInSec;
+    }
+
+    public long getMaxTimeInSec() {
+        return maxTimeInSec;
     }
     
 }

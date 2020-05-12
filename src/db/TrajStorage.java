@@ -5,9 +5,14 @@
  */
 package db;
 
+import ds.qtree.Node;
+import ds.qtree.Point;
 import ds.trajectory.Trajectory;
+import ds.transformed_trajectory.TransformedTrajPoint;
+import ds.transformed_trajectory.TransformedTrajectory;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  *
@@ -15,19 +20,26 @@ import java.util.HashMap;
  */
 public class TrajStorage {
     private HashMap<String, Trajectory> trajData;
+    private HashMap<String, TransformedTrajectory> transformedTrajData;
     private final int chunkSize;
     private int cursor;
+    private HashMap<Node, ArrayList<Point>> tempQNodeToPointListMap;
+    private HashMap<String, Object> trajToDiskBlockIdMap;
     
     public TrajStorage(HashMap<String, Trajectory> trajData) {
         this.trajData = trajData;
         chunkSize = 10000;
         cursor = 0;
+        this.tempQNodeToPointListMap = new HashMap<Node, ArrayList<Point>>();
+        this.transformedTrajData = new HashMap<String, TransformedTrajectory>();
     }
 
     public TrajStorage() {
         this.trajData = null;
         chunkSize = 100;
         cursor = 0;
+        this.tempQNodeToPointListMap = null;
+        this.transformedTrajData = new HashMap<String, TransformedTrajectory>();
     }
 
     public HashMap<String, Trajectory> getTrajData() {
@@ -50,6 +62,7 @@ public class TrajStorage {
         cursor = 0;
     }
     
+    // gives next x trajectories where x = chunkSize
     public ArrayList<Trajectory> getNextChunkAsList(){
         if (hasNext()){
             int from = cursor;
@@ -72,4 +85,81 @@ public class TrajStorage {
         return trajectory;
     }
     
+    // all points of a leaf should be propagated to its child during splitting
+    public ArrayList<Point> getPointsFromQNode(Node qNode){
+        if (tempQNodeToPointListMap.containsKey(qNode)){
+            return tempQNodeToPointListMap.get(qNode);
+        }
+        return null;
+    }
+    
+    public void addPointToQNode(Node qNode, Point point){
+        if (!tempQNodeToPointListMap.containsKey(qNode)){
+            tempQNodeToPointListMap.put(qNode, new ArrayList<Point>());
+        }
+        tempQNodeToPointListMap.get(qNode).add(point);
+    }
+    
+    // a node should be removed after it is no longer leaf (becomes pointer)
+    public void removePointListFromQNode(Node qNode){
+        if (tempQNodeToPointListMap.containsKey(qNode)){
+            tempQNodeToPointListMap.remove(qNode);
+        }
+    }
+    
+    public void clearQNodeToPointListMap(){
+        tempQNodeToPointListMap.clear();
+    }
+    
+    // should we pass transformed trajectory data chunk by chunk?
+    public HashMap<String, TransformedTrajectory> getTransformedTrajData() {
+        return transformedTrajData;
+    }
+
+    public void setTransformedTrajData(HashMap<String, TransformedTrajectory> transformedTrajData) {
+        this.transformedTrajData = transformedTrajData;
+    }
+    
+    public ArrayList<TransformedTrajectory> getTransformedTrajDataAsList() {
+        return new ArrayList<TransformedTrajectory>(transformedTrajData.values());
+    }
+    
+    public TransformedTrajectory getTransformedTrajectoryById(String Id){
+        TransformedTrajectory transformedTrajectory = transformedTrajData.get(Id);
+        return transformedTrajectory;
+    }
+    
+    public void addKeyToTransformedTrajData(String id){
+        if (!transformedTrajData.containsKey(id)){
+            // using the same method ignoring the second parameter
+            transformedTrajData.put(id, new TransformedTrajectory(id, -1));
+        }
+    }
+    
+    public void addValueToTransformedTrajData(String id, TransformedTrajPoint transformedTrajPoint){
+        addKeyToTransformedTrajData(id);
+        transformedTrajData.get(id).addTransformedTrajPoint(transformedTrajPoint);
+    }
+
+    public HashMap<String, Object> getTrajToDiskBlockIdMap() {
+        return trajToDiskBlockIdMap;
+    }
+
+    public void setTrajToDiskBlockIdMap(HashMap<String, Object> trajToDiskBlockIdMap) {
+        this.trajToDiskBlockIdMap = trajToDiskBlockIdMap;
+    }
+    
+    public Object getDiskBlockIdByTrajId(String id){
+        if (!trajToDiskBlockIdMap.containsKey(id)) return null;
+        return trajToDiskBlockIdMap.get(id);
+    }
+    
+    public void printTrajectories(){
+        for (Map.Entry<String, Trajectory> entry : trajData.entrySet()) {
+            String trajId = entry.getKey();
+            Trajectory traj = entry.getValue();
+            System.out.println(traj);
+            System.out.println(transformedTrajData.get(trajId));
+        }
+    }
 }

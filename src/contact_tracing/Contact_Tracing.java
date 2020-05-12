@@ -31,7 +31,7 @@ public class Contact_Tracing {
      */
     public static void main(String[] args) throws IOException, FileNotFoundException, ParseException {
         
-        String userTrajectoryFilePath = "../Data/sample_7MB_3.txt";
+        String userTrajectoryFilePath = "../Data/sample_1.txt";
         
         // parse, preprocess and normalize trajectory data
         TrajParser trajParser = new TrajParser();
@@ -41,16 +41,17 @@ public class Contact_Tracing {
         TrajStorage trajStorage = new TrajStorage(userTrajectories);
         
         // build index on the trajectory data (assuming we have all of it in memory)
+        int timeWindowInSec = 15*60;
         TQIndex quadTrajTree = new TQIndex(trajStorage, trajParser.getLatCoeff(), trajParser.getLatConst(), trajParser.getLonCoeff(), trajParser.getLonConst(), 
-                                            trajParser.getMaxLat(), trajParser.getMaxLon(), trajParser.getMinLat(), trajParser.getMinLon());
+                                trajParser.getMaxLat(), trajParser.getMaxLon(), trajParser.getMinLat(), trajParser.getMinLon(), trajParser.getMinTimeInSec(), timeWindowInSec);
         
         // show some statistics of the recently built index
-        Statistics stats = new Statistics(quadTrajTree);
-        //stats.printStats();
+        // Statistics stats = new Statistics(quadTrajTree);
+        // stats.printStats();
         
         // show the indexed trajectories visually along with the appropriate q-nodes
-        //quadTrajTree.draw();
-        
+        // quadTrajTree.draw();
+        /*
         // calculating spatial proximity
         double spatialProximity = 50; // in feet, should be around 13 for example
         String proximityUnit = "m"; // it can be "m", "km", "mile" and "ft"
@@ -68,6 +69,7 @@ public class Contact_Tracing {
         // facilityGraph.add(trajStorage.getTrajectoryById(trajStorage.getTrajDataAsList().get(0).getAnonymizedId()));
         // System.out.println(facilityGraph.get(0).getPointList().size());
         TestServiceQuery.run(quadTrajTree, facilityGraph, latProximity, lonProximity, temporalProximity);
+        */
     }
     
 }
