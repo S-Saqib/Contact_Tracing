@@ -18,6 +18,7 @@ import db.TrajStorage;
 import ds.qtree.Node;
 import ds.qtree.NodeType;
 import ds.qtree.QuadTree;
+import ds.rtree.Rtree;
 import ds.trajectory.TrajPoint;
 import ds.trajectory.Trajectory;
 import java.util.TreeSet;
@@ -91,10 +92,13 @@ public class TQIndex {
         // assuming zCode starts from 0 (the second argument)
         quadTree.assignZCodesToLeaves(quadTree.getRootNode(), 0);
         quadTree.transformTrajectories(quadTree.getRootNode());
-        trajStorage.printTrajectories();
+        // trajStorage.printTrajectories();
         // the following will be done when we have the disk block ids in trajStorage
-        // trajStorage.assignBlockIds(rTree.getBlockIdsForTrajectories(trajStorage.trajStorage.getTransformedTrajDataAsList()));
-        // quadTree.tagDiskBlockIdsToNodes(quadTree.getRootNode());
+        Rtree rTree = new Rtree(trajStorage.getTransformedTrajData());
+        trajStorage.setTrajIdToDiskBlockIdMap(rTree.getTrajectoryToLeafMapping());
+        quadTree.tagDiskBlockIdsToNodes(quadTree.getRootNode());
+        trajStorage.setDiskBlockIdToTrajIdListMap();
+        trajStorage.clearQNodeToPointListMap();
         
         /* need to work on the following part for (Q^2)R tree
         // cursor set to beginning automatically, so reading next chunk will not return null

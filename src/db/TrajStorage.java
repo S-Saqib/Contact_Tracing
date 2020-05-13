@@ -24,7 +24,8 @@ public class TrajStorage {
     private final int chunkSize;
     private int cursor;
     private HashMap<Node, ArrayList<Point>> tempQNodeToPointListMap;
-    private HashMap<String, Object> trajToDiskBlockIdMap;
+    private HashMap<String, Integer> trajIdToDiskBlockIdMap;
+    private HashMap<Integer, ArrayList<String>> diskBlockIdToTrajIdListMap;
     
     public TrajStorage(HashMap<String, Trajectory> trajData) {
         this.trajData = trajData;
@@ -32,6 +33,7 @@ public class TrajStorage {
         cursor = 0;
         this.tempQNodeToPointListMap = new HashMap<Node, ArrayList<Point>>();
         this.transformedTrajData = new HashMap<String, TransformedTrajectory>();
+        this.diskBlockIdToTrajIdListMap = new HashMap<Integer, ArrayList<String>>();
     }
 
     public TrajStorage() {
@@ -39,7 +41,8 @@ public class TrajStorage {
         chunkSize = 100;
         cursor = 0;
         this.tempQNodeToPointListMap = null;
-        this.transformedTrajData = new HashMap<String, TransformedTrajectory>();
+        this.transformedTrajData = null;
+        this.diskBlockIdToTrajIdListMap = null;
     }
 
     public HashMap<String, Trajectory> getTrajData() {
@@ -141,17 +144,33 @@ public class TrajStorage {
         transformedTrajData.get(id).addTransformedTrajPoint(transformedTrajPoint);
     }
 
-    public HashMap<String, Object> getTrajToDiskBlockIdMap() {
-        return trajToDiskBlockIdMap;
+    public HashMap<String, Integer> getTrajIdToDiskBlockIdMap() {
+        return trajIdToDiskBlockIdMap;
     }
 
-    public void setTrajToDiskBlockIdMap(HashMap<String, Object> trajToDiskBlockIdMap) {
-        this.trajToDiskBlockIdMap = trajToDiskBlockIdMap;
+    public void setTrajIdToDiskBlockIdMap(HashMap<String, Integer> trajToDiskBlockIdMap) {
+        this.trajIdToDiskBlockIdMap = trajToDiskBlockIdMap;
+    }
+    
+    public void setDiskBlockIdToTrajIdListMap(){
+        for (Map.Entry<String, Integer> entry : trajIdToDiskBlockIdMap.entrySet()) {
+            String trajId = entry.getKey();
+            Integer blockId = entry.getValue();
+            if (!diskBlockIdToTrajIdListMap.containsKey(blockId)){
+                diskBlockIdToTrajIdListMap.put(blockId, new ArrayList<String>());
+            }
+            diskBlockIdToTrajIdListMap.get(blockId).add(trajId);
+        }
     }
     
     public Object getDiskBlockIdByTrajId(String id){
-        if (!trajToDiskBlockIdMap.containsKey(id)) return null;
-        return trajToDiskBlockIdMap.get(id);
+        if (!trajIdToDiskBlockIdMap.containsKey(id)) return null;
+        return trajIdToDiskBlockIdMap.get(id);
+    }
+    
+    public ArrayList<String> getTrajIdListByBlockId(Integer blockId){
+        if (!diskBlockIdToTrajIdListMap.containsKey(blockId)) return null;
+        return diskBlockIdToTrajIdListMap.get(blockId);
     }
     
     public void printTrajectories(){

@@ -51,7 +51,7 @@ public class Contact_Tracing {
         
         // show the indexed trajectories visually along with the appropriate q-nodes
         // quadTrajTree.draw();
-        /*
+        
         // calculating spatial proximity
         double spatialProximity = 50; // in feet, should be around 13 for example
         String proximityUnit = "m"; // it can be "m", "km", "mile" and "ft"
@@ -68,8 +68,7 @@ public class Contact_Tracing {
         facilityGraph.add(trajStorage.getTrajectoryById("AAH03JAAQAAAO9VAA/"));
         // facilityGraph.add(trajStorage.getTrajectoryById(trajStorage.getTrajDataAsList().get(0).getAnonymizedId()));
         // System.out.println(facilityGraph.get(0).getPointList().size());
-        TestServiceQuery.run(quadTrajTree, facilityGraph, latProximity, lonProximity, temporalProximity);
-        */
+        TestServiceQuery.run(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, temporalProximity);
     }
     
 }

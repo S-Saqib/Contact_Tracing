@@ -1,30 +1,28 @@
 package query.service;
 
+import db.TrajStorage;
 import java.util.ArrayList;
-
-import com.vividsolutions.jts.geom.impl.CoordinateArraySequence;
-
 import ds.qtrajtree.TQIndex;
 import ds.trajectory.TrajPoint;
 import ds.trajectory.Trajectory;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.TreeSet;
-import query.QueryGraphGenerator;
 
 public class TestServiceQuery {
 
-    public static void run(TQIndex quadTrajTree, ArrayList<Trajectory> facilityGraph, double latDisThreshold, double lonDisThreshold, long temporalDisThreshold) {
+    public static void run(TrajStorage trajStorage, TQIndex quadTrajTree, ArrayList<Trajectory> facilityGraph,
+                            double latDisThreshold, double lonDisThreshold, long temporalDisThreshold) {
 
         //int numberOfRuns = 10;
         //double naiveTime = 0, zOrderTime = 0;
         //for (int i = 0; i < numberOfRuns; i++) {
-            ServiceQueryProcessor processQuery = new ServiceQueryProcessor(quadTrajTree, latDisThreshold, lonDisThreshold, temporalDisThreshold);
+            ServiceQueryProcessor processQuery = new ServiceQueryProcessor(trajStorage, quadTrajTree, latDisThreshold, lonDisThreshold, temporalDisThreshold);
             //System.out.println("--Service Query--");
             //System.out.println("Optimal:");
             //double from = System.nanoTime();
             HashMap<String, TreeSet<TrajPoint>> infectedContacts = new HashMap<String, TreeSet<TrajPoint>>();
-            infectedContacts = processQuery.evaluateService(quadTrajTree.getQuadTree().getRootNode(), facilityGraph, infectedContacts);
+            // infectedContacts = processQuery.evaluateService(quadTrajTree.getQuadTree().getRootNode(), facilityGraph, infectedContacts);
+            infectedContacts = processQuery.calculateCover(quadTrajTree.getQuadTree(), facilityGraph, infectedContacts);
             System.out.println("Infected = " + infectedContacts.size() + " persons");
             for (HashMap.Entry<String, TreeSet<TrajPoint>> entry : infectedContacts.entrySet()){
                 System.out.print(entry.getKey() + " : ");

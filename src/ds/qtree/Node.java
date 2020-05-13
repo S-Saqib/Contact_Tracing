@@ -183,6 +183,7 @@ public class Node {
     
     public ArrayList<Object> getDiskBlocksByQNodeTimeIndex(int timeBucket){
         if (timeBucket < 0) return null;
+        if (!timeBucketToDiskBlockIdMap.containsKey(timeBucket)) return null;
         return new ArrayList<Object>(timeBucketToDiskBlockIdMap.get(timeBucket));
     }
 

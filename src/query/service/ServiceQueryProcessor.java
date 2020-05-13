@@ -6,6 +6,7 @@
 package query.service;
 
 import com.vividsolutions.jts.geom.Coordinate;
+import db.TrajStorage;
 import ds.qtrajtree.TQIndex;
 import ds.qtree.Node;
 import ds.qtree.NodeType;
@@ -16,6 +17,7 @@ import ds.trajectory.TrajPointComparator;
 import ds.trajectory.Trajectory;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.TreeSet;
 
 /**
@@ -28,12 +30,14 @@ public class ServiceQueryProcessor {
     private double latDisThreshold;
     private double lonDisThreshold;
     private double temporalDisThreshold;
+    private TrajStorage trajStorage;
 
-    public ServiceQueryProcessor(TQIndex quadTrajTree, double latDisThreshold, double lonDisThreshold, long temporalDisThreshold) {
+    public ServiceQueryProcessor(TrajStorage trajStorage, TQIndex quadTrajTree, double latDisThreshold, double lonDisThreshold, long temporalDisThreshold) {
         this.quadTrajTree = quadTrajTree;
         this.latDisThreshold = latDisThreshold;
         this.lonDisThreshold = lonDisThreshold;
         this.temporalDisThreshold = temporalDisThreshold;
+        this.trajStorage = trajStorage;
     }
     
     public ServiceQueryProcessor(TQIndex quadTrajTree) {
@@ -66,7 +70,10 @@ public class ServiceQueryProcessor {
     public void setTemporalDisThreshold(double temporalDisThreshold) {
         this.temporalDisThreshold = temporalDisThreshold;
     }
-
+    
+    // the following method deals with inter node trajectories organized hierarchically
+    // it traverses from root to leaves of the first level quadtree and processes internode trajectories for each node by calling evaluateNodeTraj method
+    // should not be needed for QR-tree
     public HashMap <String, TreeSet<TrajPoint>> evaluateService(Node qNode, ArrayList<Trajectory> facilityQuery, HashMap <String, TreeSet<TrajPoint>> contactInfo) {
         if (facilityQuery == null || facilityQuery.isEmpty() || qNode.getNodeType() == NodeType.EMPTY) {
             return null;
@@ -145,6 +152,8 @@ public class ServiceQueryProcessor {
         return true;
     }
     
+    // the following method obtains the corresponding quadtree for the inter node trajectories of a node and passes to calculate cover for processing them
+    // should not be needed for QR tree as we have a single quadtree
     private HashMap <String, TreeSet<TrajPoint>> evaluateNodeTraj(Node qNode, ArrayList<Trajectory> facilityQuery, HashMap<String, TreeSet<TrajPoint>> contactInfo) {
         if (facilityQuery == null || facilityQuery.isEmpty()) {
             return null;
@@ -156,42 +165,72 @@ public class ServiceQueryProcessor {
         return calculateCover(interNodeQuadTree, facilityQuery, contactInfo);
     }
     
-    private HashMap <String, TreeSet<TrajPoint>> calculateCover(QuadTree interNodeQuadTree, ArrayList<Trajectory> facilityQuery, HashMap<String, TreeSet<TrajPoint>> contactInfo) {
+    // actually calculates the overlaps with facility trajectory
+    // should be called directly for QR-tree
+    public HashMap <String, TreeSet<TrajPoint>> calculateCover(QuadTree quadTree, ArrayList<Trajectory> facilityQuery, HashMap<String, TreeSet<TrajPoint>> contactInfo) {
         for (Trajectory trajectory : facilityQuery) {
-            String anonymizedId = trajectory.getAnonymizedId();
+            String infectedAnonymizedId = trajectory.getAnonymizedId();
             for (TrajPoint trajPoint : trajectory.getPointList()) {
                 // trajPointCoordinate of a facility point
                 Coordinate trajPointCoordinate = trajPoint.getPointLocation();
-                double x = trajPointCoordinate.x;
-                double y = trajPointCoordinate.y;
-                double t = trajPoint.getTimeInSec();
+                double infectedX = trajPointCoordinate.x;
+                double infectedY = trajPointCoordinate.y;
+                double infectedT = trajPoint.getTimeInSec();
                 // taking each point of facility subgraph we are checking against the points of inter node trajectories, indexed in the quadtree
-                double xMin = x - latDisThreshold;
-                double xMax = x + latDisThreshold;
-                double yMin = y - lonDisThreshold;
-                double yMax = y + lonDisThreshold;
-                Node[] relevantNodes = interNodeQuadTree.searchIntersect(xMin, yMin, xMax, yMax);
+                double xMin = infectedX - latDisThreshold;
+                double xMax = infectedX + latDisThreshold;
+                double yMin = infectedY - lonDisThreshold;
+                double yMax = infectedY + lonDisThreshold;
+                
+                Node[] relevantNodes = quadTree.searchIntersect(xMin, yMin, xMax, yMax);
+                
+                // calculating time index for the trajectory points
+                ArrayList<Integer> timeBuckets = new ArrayList<Integer>();
+                int timeIndexFrom = quadTree.getTimeIndex(trajPoint.getTimeInSec());
+                int timeIndexTo = quadTree.getTimeIndex(trajPoint.getTimeInSec() + (long) temporalDisThreshold);
+                for (int timeIndex = timeIndexFrom; timeIndex <= timeIndexTo; timeIndex++){
+                    timeBuckets.add(timeIndex);
+                }
+                
+                HashSet<Integer> relevantDiskBlocks = new HashSet<Integer>();
                 for (Node node : relevantNodes){
-                    ArrayList<Point> relevantPoints = node.getPoints();
-                    for (Point point: relevantPoints){
+                    for (int timeIndex : timeBuckets){
+                        ArrayList<Object> mappedDiskBlocks = node.getDiskBlocksByQNodeTimeIndex(timeIndex);
+                        if (mappedDiskBlocks == null) continue;
+                        for (Object blockId : mappedDiskBlocks){
+                            relevantDiskBlocks.add((Integer) blockId);
+                        }
+                    }
+                }
+                
+                ArrayList<Trajectory> relevantTrajectories = new ArrayList<Trajectory>();
+                // need a map for disk block id to trajectory (the reverse of traj to disk block map
+                for (Integer blockId : relevantDiskBlocks){
+                    for (String trajId : trajStorage.getTrajIdListByBlockId(blockId)){
+                        relevantTrajectories.add(trajStorage.getTrajectoryById(trajId));
+                    }
+                }
+                
+                for (Trajectory traj : relevantTrajectories){
+                    String checkId = traj.getAnonymizedId();
+                    for (TrajPoint point : traj.getPointList()){
                         // checking if the point belongs to the same trajectory, if so, it should be ignored
-                        if (((String)point.getTraj_id()).equals(anonymizedId)){
+                        if (checkId.equals(infectedAnonymizedId)){
                             continue;
                         }
                         // spatial matching: checking if eucliean distance is within spatialDistanceThreshold
-                        double checkX = point.getX();
-                        double checkY = point.getY();
+                        double checkX = point.getPointLocation().x;
+                        double checkY = point.getPointLocation().y;
                         // need to calculate geodesic distance here
-                        double euclideanDistance = Math.sqrt(Math.pow((x - checkX), 2) + Math.pow((y - checkY), 2));
+                        double euclideanDistance = Math.sqrt(Math.pow((infectedX - checkX), 2) + Math.pow((infectedY - checkY), 2));
                         if (euclideanDistance <= (latDisThreshold+lonDisThreshold)/2){
                             double checkT = point.getTimeInSec();
                             // temporal matching: checkT should be in [t, t+temporalDistanceThreshold] window for a contact to be affected
-                            if (checkT - t >= 0 && checkT - t <= temporalDisThreshold){
-                                String infectedTrajId = (String)point.getTraj_id();
-                                if (!contactInfo.containsKey(infectedTrajId)){
-                                    contactInfo.put((String)point.getTraj_id(), new TreeSet<TrajPoint>(new TrajPointComparator()));
+                            if (checkT - infectedT >= 0 && checkT - infectedT <= temporalDisThreshold){
+                                if (!contactInfo.containsKey(checkId)){
+                                    contactInfo.put((String)checkId, new TreeSet<TrajPoint>(new TrajPointComparator()));
                                 }
-                                contactInfo.get(infectedTrajId).add(point);
+                                contactInfo.get(checkId).add(point);
                             }
                         }
                     }

@@ -163,20 +163,14 @@ public class QuadTree {
         final HashSet<Node> arr = new HashSet<Node>();
         this.navigate(this.root_, new Func() {
             public void call(QuadTree quadTree, Node node) {
-                // the following loop may be optimized if we can check node boundary only instead of all the points
-                for (Point point: trajStorage.getPointsFromQNode(node)){
-                    if (point.getX() < xmin || point.getX() > xmax || point.getY() < ymin || point.getY() > ymax) {
-                        // Definitely not within the polygon!
-                    } else {
-                        arr.add(node);
-                        break;
-                    }
-                }
+                boolean intersects = intersects(xmin, ymin, xmax, ymax, node);
+                if (intersects) arr.add(node);
             }
         }, xmin, ymin, xmax, ymax);
         return arr.toArray(new Node[arr.size()]);
     }
-
+    
+    // the following method is not used, so not updated like searchIntersect
     public Point[] searchWithin(final double xmin, final double ymin, final double xmax, final double ymax) {
         final List<Point> arr = new ArrayList<Point>();
         this.navigate(this.root_, new Func() {
@@ -437,7 +431,7 @@ public class QuadTree {
         node.incPointCount();
     }
     
-    private int getTimeIndex(long timeStamp){
+    public int getTimeIndex(long timeStamp){
         if (timeStamp < minTimeInSec) return -1;
         return (int)((timeStamp - minTimeInSec)/timeWindowInSec);
     }
@@ -501,6 +495,7 @@ public class QuadTree {
                     node.addDiskBlockId(timeIndex, diskBlockId);
                 }
             }
+            return;
         }
         tagDiskBlockIdsToNodes(node.getNw());
         tagDiskBlockIdsToNodes(node.getNe());
