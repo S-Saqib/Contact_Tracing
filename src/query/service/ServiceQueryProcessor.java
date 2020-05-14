@@ -31,6 +31,7 @@ public class ServiceQueryProcessor {
     private double lonDisThreshold;
     private double temporalDisThreshold;
     private TrajStorage trajStorage;
+    private long blocksAccessed;
 
     public ServiceQueryProcessor(TrajStorage trajStorage, TQIndex quadTrajTree, double latDisThreshold, double lonDisThreshold, long temporalDisThreshold) {
         this.quadTrajTree = quadTrajTree;
@@ -38,6 +39,7 @@ public class ServiceQueryProcessor {
         this.lonDisThreshold = lonDisThreshold;
         this.temporalDisThreshold = temporalDisThreshold;
         this.trajStorage = trajStorage;
+        this.blocksAccessed = 0;
     }
     
     public ServiceQueryProcessor(TQIndex quadTrajTree) {
@@ -202,6 +204,7 @@ public class ServiceQueryProcessor {
                         }
                     }
                 }
+                this.blocksAccessed = relevantDiskBlocks.size();
                 
                 ArrayList<Trajectory> relevantTrajectories = new ArrayList<Trajectory>();
                 // need a map for disk block id to trajectory (the reverse of traj to disk block map
@@ -239,4 +242,9 @@ public class ServiceQueryProcessor {
         }
         return contactInfo;
     }
+
+    public long getBlocksAccessed() {
+        return blocksAccessed;
+    }
+    
 }

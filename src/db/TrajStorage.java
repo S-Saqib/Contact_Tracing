@@ -10,7 +10,9 @@ import ds.qtree.Point;
 import ds.trajectory.Trajectory;
 import ds.transformed_trajectory.TransformedTrajPoint;
 import ds.transformed_trajectory.TransformedTrajectory;
+import static java.lang.Integer.max;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,6 +28,7 @@ public class TrajStorage {
     private HashMap<Node, ArrayList<Point>> tempQNodeToPointListMap;
     private HashMap<String, Integer> trajIdToDiskBlockIdMap;
     private HashMap<Integer, ArrayList<String>> diskBlockIdToTrajIdListMap;
+    private ArrayList<String> []pointWiseTrajIdList;
     
     public TrajStorage(HashMap<String, Trajectory> trajData) {
         this.trajData = trajData;
@@ -180,5 +183,42 @@ public class TrajStorage {
             System.out.println(traj);
             System.out.println(transformedTrajData.get(trajId));
         }
+    }
+    
+    // the following functions should not be in this file, kept here for shortage of time
+    public void prepareQueryDataset(){
+        int pointCountInBucket = 25;
+        pointWiseTrajIdList = new ArrayList [5];
+        for (int i=0; i<5; i++) pointWiseTrajIdList[i] = new ArrayList<String>();
+        for (Map.Entry<String, Trajectory> entry : trajData.entrySet()) {
+            Trajectory traj = entry.getValue();
+            int numberOfPoints = traj.getPointList().size();
+            if (numberOfPoints > 500) continue;
+            else if (numberOfPoints <= 25) pointWiseTrajIdList[0].add(entry.getKey());
+            else if (numberOfPoints <= 50) pointWiseTrajIdList[1].add(entry.getKey());
+            else if (numberOfPoints <= 75) pointWiseTrajIdList[2].add(entry.getKey());
+            else if (numberOfPoints <= 100) pointWiseTrajIdList[3].add(entry.getKey());
+            else pointWiseTrajIdList[4].add(entry.getKey());
+            /*
+            if (trajBucket > 4) trajBucket = 4;
+            if (pointWiseTrajIdList[trajBucket] == null) pointWiseTrajIdList[trajBucket] = new ArrayList<String>();
+            pointWiseTrajIdList[trajBucket].add(entry.getKey());
+            */
+        }
+        
+        System.out.println("No. of Trajs = " + trajData.size());
+        /*
+        for (int i=0; i<pointWiseTrajIdList.length; i++){
+            System.out.println(i*pointCountInBucket + "-" + ((i+1)*pointCountInBucket-1) + " : " + pointWiseTrajIdList[i].size());
+        }
+        */
+    }
+    
+    public Trajectory getQueryTrajectory(int pointBucketId){
+        if (pointBucketId < 0 || pointBucketId >= pointWiseTrajIdList.length) return null;
+        int bucketSize = pointWiseTrajIdList[pointBucketId].size();
+        int randomTrajId = (int)(Math.random()*bucketSize);
+        if (randomTrajId == bucketSize) randomTrajId--;
+        return trajData.get(pointWiseTrajIdList[pointBucketId].get(randomTrajId));
     }
 }
