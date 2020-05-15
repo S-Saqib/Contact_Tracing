@@ -42,7 +42,7 @@ public class Node {
         this.opt_parent = opt_parent;
         this.depth = depth;
         this.pointCount = 0;
-        this.nodeCapacity = 32;
+        this.nodeCapacity = 128;
         this.timeBucketToDiskBlockIdMap = new HashMap<Integer, HashSet<Object>>();
         this.zCode = -1;
     }

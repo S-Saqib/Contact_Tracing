@@ -91,13 +91,22 @@ public class TQIndex {
         
         // assuming zCode starts from 0 (the second argument)
         quadTree.assignZCodesToLeaves(quadTree.getRootNode(), 0);
-        quadTree.transformTrajectories(quadTree.getRootNode());
+        // coordinate transformation
+        // quadTree.transformTrajectories(quadTree.getRootNode());
         // trajStorage.printTrajectories();
-        // the following will be done when we have the disk block ids in trajStorage
-        Rtree rTree = new Rtree(trajStorage.getTransformedTrajData());
-        trajStorage.setTrajIdToDiskBlockIdMap(rTree.getTrajectoryToLeafMapping());
+        
+        // grouping in transformed coordinates (QR tree)
+        // Rtree rTree = new Rtree(trajStorage.getTransformedTrajData());
+        // trajStorage.setTrajIdToDiskBlockIdMap(rTree.getTrajectoryToLeafMapping());
+        // trajStorage.setDiskBlockIdToTrajIdListMap();
+        
+        // grouping randomly (Q-tree) : directly done in tagDiskBlockIdsToNodes
+        // obtained by dividing traj id (a long value) by avg # of trajs in rtree node
+        // reverse map done using same logic so they are on the same ground
+        trajStorage.setTrivialDiskBlockIdToTrajIdListMap();
+        // assigning block no. to qNode leaves
         quadTree.tagDiskBlockIdsToNodes(quadTree.getRootNode());
-        trajStorage.setDiskBlockIdToTrajIdListMap();
+        // removing redundant temporary information
         trajStorage.clearQNodeToPointListMap();
         
         /* need to work on the following part for (Q^2)R tree

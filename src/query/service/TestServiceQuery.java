@@ -25,7 +25,7 @@ public class TestServiceQuery {
             long fromTime = System.nanoTime();
             infectedContacts = processQuery.calculateCover(quadTrajTree.getQuadTree(), facilityGraph, infectedContacts);
             long toTime = System.nanoTime();
-            System.out.println(facilityGraph.get(0).getAnonymizedId() + " " + infectedContacts.size());
+            System.out.println(facilityGraph.get(0).getAnonymizedId() + " " + facilityGraph.get(0).getPointList().size() + " : " + infectedContacts.size());
             ArrayList <Double> timeIO = new ArrayList<Double>();
             timeIO.add((toTime-fromTime)/1.0e9);
             timeIO.add(processQuery.getBlocksAccessed()*1.0);

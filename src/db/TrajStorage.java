@@ -166,6 +166,21 @@ public class TrajStorage {
         }
     }
     
+    public void setTrivialDiskBlockIdToTrajIdListMap(){
+        double avgTrajPerBlk = 3;
+        // using rtree, it is around 2.9 for different datasets, so used 3
+        for (Map.Entry<String, Trajectory> entry : trajData.entrySet()) {
+            String trajId = entry.getKey();
+            Trajectory traj = entry.getValue();
+            // this is the logic of getting block id
+            Integer blockId = (int)(traj.getUserId() / avgTrajPerBlk);
+            if (!diskBlockIdToTrajIdListMap.containsKey(blockId)){
+                diskBlockIdToTrajIdListMap.put(blockId, new ArrayList<String>());
+            }
+            diskBlockIdToTrajIdListMap.get(blockId).add(trajId);
+        }
+    }
+    
     public Object getDiskBlockIdByTrajId(String id){
         if (!trajIdToDiskBlockIdMap.containsKey(id)) return null;
         return trajIdToDiskBlockIdMap.get(id);
@@ -187,18 +202,17 @@ public class TrajStorage {
     
     // the following functions should not be in this file, kept here for shortage of time
     public void prepareQueryDataset(){
-        int pointCountInBucket = 25;
-        pointWiseTrajIdList = new ArrayList [5];
-        for (int i=0; i<5; i++) pointWiseTrajIdList[i] = new ArrayList<String>();
+        int pointCountInBucket = 50;
+        pointWiseTrajIdList = new ArrayList [4];
+        for (int i=0; i<pointWiseTrajIdList.length; i++) pointWiseTrajIdList[i] = new ArrayList<String>();
         for (Map.Entry<String, Trajectory> entry : trajData.entrySet()) {
             Trajectory traj = entry.getValue();
             int numberOfPoints = traj.getPointList().size();
             if (numberOfPoints > 500) continue;
-            else if (numberOfPoints <= 25) pointWiseTrajIdList[0].add(entry.getKey());
-            else if (numberOfPoints <= 50) pointWiseTrajIdList[1].add(entry.getKey());
-            else if (numberOfPoints <= 75) pointWiseTrajIdList[2].add(entry.getKey());
-            else if (numberOfPoints <= 100) pointWiseTrajIdList[3].add(entry.getKey());
-            else pointWiseTrajIdList[4].add(entry.getKey());
+            else if (numberOfPoints <= 50) pointWiseTrajIdList[0].add(entry.getKey());
+            else if (numberOfPoints <= 100) pointWiseTrajIdList[1].add(entry.getKey());
+            else if (numberOfPoints <= 200) pointWiseTrajIdList[2].add(entry.getKey());
+            else pointWiseTrajIdList[3].add(entry.getKey());
             /*
             if (trajBucket > 4) trajBucket = 4;
             if (pointWiseTrajIdList[trajBucket] == null) pointWiseTrajIdList[trajBucket] = new ArrayList<String>();

@@ -39,10 +39,11 @@ public class Contact_Tracing {
         long temporalProximity = 30; // in minutes, may be anything around 5 to 240 for example
         // 15, 30 (default), 60, 180
         temporalProximity *= 60;    // in seconds
-        int trajLengthId = 1;   // 0 = 1-25, 1 = 26-50 (default), 2 = 51-75, 3 = 76-100 
-        int numberOfRuns = 20;
+        int trajLengthId = 1;  // 0 = 1-50, 1 = 51-100 (default), 2 = 101-200, 3 = over 200
+        int numberOfRuns = 100;
         
         int timeWindowInSec = 30*60;
+        // using default temporal proximity as the time window used in index
         
         // parse, preprocess and normalize trajectory data
         TrajParser trajParser = new TrajParser();
@@ -73,6 +74,7 @@ public class Contact_Tracing {
         double lonProximity = distanceConverter.getLonProximity(spatialProximity, proximityUnit);
         //System.out.println(latProximity + " and " + lonProximity);
         
+        //for (trajLengthId = 0; trajLengthId<4; trajLengthId++){
         double t, io;
         t = io = 0;
         for (int i=0; i<numberOfRuns; i++){
@@ -88,6 +90,7 @@ public class Contact_Tracing {
         }
         t /= numberOfRuns;
         io /= numberOfRuns;
-        System.out.println(t + " " + io);
+        System.out.println(trajLengthId + " --- " + t + " " + io);
+        //}
     }
 }
