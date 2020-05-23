@@ -487,15 +487,15 @@ public class QuadTree {
         }
         if (node.getNodeType() == NodeType.LEAF){
             ArrayList <Point> pointList = trajStorage.getPointsFromQNode(node);
-            double avgTrajPerBlk = 3;
+            // double avgTrajPerBlk = 3;
             // using rtree, it is around 2.9 for different datasets, so used 3
             for (Point point : pointList){
                 int timeIndex = getTimeIndex(point.getTimeInSec());
                 if (timeIndex > 0){
                     String trajId = (String)point.getTraj_id();
-                    // Object diskBlockId = trajStorage.getDiskBlockIdByTrajId(trajId);
+                    Object diskBlockId = trajStorage.getDiskBlockIdByTrajId(trajId);
                     // this is the logic of getting block id, calculated directly without help of trajStorage
-                    Object diskBlockId = (int)(trajStorage.getTrajectoryById(trajId).getUserId() / avgTrajPerBlk);
+                    // Object diskBlockId = (int)(trajStorage.getTrajectoryById(trajId).getUserId() / avgTrajPerBlk);
                     node.addDiskBlockId(timeIndex, diskBlockId);
                 }
             }

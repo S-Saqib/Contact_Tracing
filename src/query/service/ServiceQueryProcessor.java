@@ -31,7 +31,8 @@ public class ServiceQueryProcessor {
     private double lonDisThreshold;
     private double temporalDisThreshold;
     private TrajStorage trajStorage;
-    private long blocksAccessed;
+    private HashSet<Integer> blocksAccessed;
+    private HashSet<String> trajectoriesAccessed;
 
     public ServiceQueryProcessor(TrajStorage trajStorage, TQIndex quadTrajTree, double latDisThreshold, double lonDisThreshold, long temporalDisThreshold) {
         this.quadTrajTree = quadTrajTree;
@@ -39,7 +40,8 @@ public class ServiceQueryProcessor {
         this.lonDisThreshold = lonDisThreshold;
         this.temporalDisThreshold = temporalDisThreshold;
         this.trajStorage = trajStorage;
-        this.blocksAccessed = 0;
+        this.blocksAccessed = new HashSet<Integer>();
+        // this.trajectoriesAccessed = new HashSet<String>();
     }
     
     public ServiceQueryProcessor(TQIndex quadTrajTree) {
@@ -164,12 +166,14 @@ public class ServiceQueryProcessor {
         if (interNodeQuadTree == null || interNodeQuadTree.isEmpty()) {
             return null;
         }
-        return calculateCover(interNodeQuadTree, facilityQuery, contactInfo);
+        // return calculateCover(interNodeQuadTree, facilityQuery, contactInfo);
+        return calculateCover(interNodeQuadTree, facilityQuery, contactInfo, null);
     }
     
     // actually calculates the overlaps with facility trajectory
     // should be called directly for QR-tree
-    public HashMap <String, TreeSet<TrajPoint>> calculateCover(QuadTree quadTree, ArrayList<Trajectory> facilityQuery, HashMap<String, TreeSet<TrajPoint>> contactInfo) {
+    public HashMap <String, TreeSet<TrajPoint>> calculateCover(QuadTree quadTree, ArrayList<Trajectory> facilityQuery,
+                                                    HashMap<String, TreeSet<TrajPoint>> contactInfo, HashSet<String> alreadyInfectedIds) {
         for (Trajectory trajectory : facilityQuery) {
             String infectedAnonymizedId = trajectory.getAnonymizedId();
             for (TrajPoint trajPoint : trajectory.getPointList()) {
@@ -201,16 +205,17 @@ public class ServiceQueryProcessor {
                         if (mappedDiskBlocks == null) continue;
                         for (Object blockId : mappedDiskBlocks){
                             relevantDiskBlocks.add((Integer) blockId);
+                            blocksAccessed.add((Integer) blockId);
                         }
                     }
                 }
-                this.blocksAccessed = relevantDiskBlocks.size();
                 
                 ArrayList<Trajectory> relevantTrajectories = new ArrayList<Trajectory>();
                 // need a map for disk block id to trajectory (the reverse of traj to disk block map
                 for (Integer blockId : relevantDiskBlocks){
                     for (String trajId : trajStorage.getTrajIdListByBlockId(blockId)){
                         relevantTrajectories.add(trajStorage.getTrajectoryById(trajId));
+                        // trajectoriesAccessed.add(trajId);
                     }
                 }
                 
@@ -218,7 +223,9 @@ public class ServiceQueryProcessor {
                     String checkId = traj.getAnonymizedId();
                     for (TrajPoint point : traj.getPointList()){
                         // checking if the point belongs to the same trajectory, if so, it should be ignored
-                        if (checkId.equals(infectedAnonymizedId)){
+                        // if (checkId.equals(infectedAnonymizedId)){
+                        // checking if the point belongs to a covid positive user given as input to the method, if so, it should be ignored
+                        if (infectedAnonymizedId.contains(checkId)){
                             continue;
                         }
                         // spatial matching: checking if eucliean distance is within spatialDistanceThreshold
@@ -243,8 +250,11 @@ public class ServiceQueryProcessor {
         return contactInfo;
     }
 
-    public long getBlocksAccessed() {
-        return blocksAccessed;
+    public int getBlocksAccessed() {
+        return blocksAccessed.size();
     }
     
+    public int getTrajectoriesAccessed() {
+        return trajectoriesAccessed.size();
+    }
 }
