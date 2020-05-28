@@ -91,21 +91,35 @@ public class TQIndex {
         
         // assuming zCode starts from 0 (the second argument)
         quadTree.assignZCodesToLeaves(quadTree.getRootNode(), 0);
-        // coordinate transformation
-        quadTree.transformTrajectories(quadTree.getRootNode());
-        // trajStorage.printTrajectories();
         
-        // grouping in transformed coordinates (QR tree)
-        Rtree rTree = new Rtree(trajStorage.getTransformedTrajData());
-        trajStorage.setTrajIdToDiskBlockIdMap(rTree.getTrajectoryToLeafMapping());
-        trajStorage.setDiskBlockIdToTrajIdListMap();
+        // qr-tree
+        {
+            // coordinate transformation
+            quadTree.transformTrajectories(quadTree.getRootNode());
+            // trajStorage.printTrajectories();
+
+            // grouping in transformed coordinates (QR tree)
+            Rtree rTree = new Rtree(trajStorage.getTransformedTrajData());
+            trajStorage.setTrajIdToDiskBlockIdMap(rTree.getTrajectoryToLeafMapping());
+            trajStorage.setDiskBlockIdToTrajIdListMap();
+            // assigning block no. to qNode leaves
+            quadTree.tagDiskBlockIdsToNodes(quadTree.getRootNode());
+        }
         
-        // grouping randomly (Q-tree) : directly done in tagDiskBlockIdsToNodes
-        // obtained by dividing traj id (a long value) by avg # of trajs in rtree node
-        // reverse map done using same logic so they are on the same ground
-        // trajStorage.setTrivialDiskBlockIdToTrajIdListMap();
-        // assigning block no. to qNode leaves
-        quadTree.tagDiskBlockIdsToNodes(quadTree.getRootNode());
+        /*
+        // q-tree
+        {
+            // adding time info as keys in the maps associated with each node
+            // it was directly done in the transformTrajectories method previously
+            quadTree.makeTimeIndex(quadTree.getRootNode());
+            // grouping randomly (Q-tree) : directly done in tagDiskBlockIdsToNodes
+            // obtained by dividing traj id (a long value) by avg # of trajs in rtree node
+            // reverse map done using same logic so they are on the same ground
+            trajStorage.setTrivialDiskBlockIdToTrajIdListMap();
+            // assigning block no. to qNode leaves
+            quadTree.tagTrivialDiskBlockIdsToNodes(quadTree.getRootNode());
+        }
+        */
         // removing redundant temporary information
         trajStorage.clearQNodeToPointListMap();
         

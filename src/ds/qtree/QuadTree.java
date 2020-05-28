@@ -480,6 +480,25 @@ public class QuadTree {
         transformTrajectories(node.getSe());
     }
     
+    public void makeTimeIndex(Node node){
+        if (node.getNodeType() == NodeType.EMPTY){
+            // just added for safety, should not reach here
+            return;
+        }
+        if (node.getNodeType() == NodeType.LEAF){
+            ArrayList <Point> pointList = trajStorage.getPointsFromQNode(node);
+            for (Point point : pointList){
+                int timeIndex = getTimeIndex(point.getTimeInSec());
+                node.addTimeKey(timeIndex);
+            }
+            return;
+        }
+        makeTimeIndex(node.getNw());
+        makeTimeIndex(node.getNe());
+        makeTimeIndex(node.getSw());
+        makeTimeIndex(node.getSe());
+    }
+    
     public void tagDiskBlockIdsToNodes(Node node){
         if (node.getNodeType() == NodeType.EMPTY){
             // just added for safety, should not reach here
@@ -505,6 +524,32 @@ public class QuadTree {
         tagDiskBlockIdsToNodes(node.getNe());
         tagDiskBlockIdsToNodes(node.getSw());
         tagDiskBlockIdsToNodes(node.getSe());
+    }
+    
+    public void tagTrivialDiskBlockIdsToNodes(Node node){
+        if (node.getNodeType() == NodeType.EMPTY){
+            // just added for safety, should not reach here
+            return;
+        }
+        if (node.getNodeType() == NodeType.LEAF){
+            ArrayList <Point> pointList = trajStorage.getPointsFromQNode(node);
+            double avgTrajPerBlk = 3;
+            // using rtree, it is around 2.9 for different datasets, so used 3
+            for (Point point : pointList){
+                int timeIndex = getTimeIndex(point.getTimeInSec());
+                if (timeIndex > 0){
+                    String trajId = (String)point.getTraj_id();
+                    // this is the logic of getting block id, calculated directly without help of trajStorage
+                    Object diskBlockId = (int)(trajStorage.getTrajectoryById(trajId).getUserId() / avgTrajPerBlk);
+                    node.addDiskBlockId(timeIndex, diskBlockId);
+                }
+            }
+            return;
+        }
+        tagTrivialDiskBlockIdsToNodes(node.getNw());
+        tagTrivialDiskBlockIdsToNodes(node.getNe());
+        tagTrivialDiskBlockIdsToNodes(node.getSw());
+        tagTrivialDiskBlockIdsToNodes(node.getSe());
     }
     
 }

@@ -76,7 +76,7 @@ public class Contact_Tracing {
             // show the indexed trajectories visually along with the appropriate q-nodes
             // quadTrajTree.draw();
             
-            for (int recDepth = 1; recDepth <= 5; recDepth++){
+            for (int recDepth = 1; recDepth <= 3; recDepth++){
                 for (long tProx : temporalProximityValues){
                     for (double sProx : spatialProximityValues){
                         for (int tLenId = 0; tLenId < 4; tLenId++){
@@ -129,7 +129,7 @@ public class Contact_Tracing {
                             else pointBucketRange = "> 200";
                             System.out.println("\nParameters: " + dataSetSize + "k Trajs, " + pointBucketRange + " Points, " + sProx + " Meters, "
                                                 + tProx/60 + " Minutes, Upto Level " + recDepth);
-                            System.out.println(" Time = " + t + " , IO = " + io + " Avg. Infected = " + infectedCount + "\n");
+                            System.out.println("Time = " + t + " , IO = " + io + " Avg. Infected = " + infectedCount + "\n");
                         }
                     }
                 }

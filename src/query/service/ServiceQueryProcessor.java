@@ -225,7 +225,7 @@ public class ServiceQueryProcessor {
                         // checking if the point belongs to the same trajectory, if so, it should be ignored
                         // if (checkId.equals(infectedAnonymizedId)){
                         // checking if the point belongs to a covid positive user given as input to the method, if so, it should be ignored
-                        if (infectedAnonymizedId.contains(checkId)){
+                        if (infectedAnonymizedId.equals(checkId)){
                             continue;
                         }
                         // spatial matching: checking if eucliean distance is within spatialDistanceThreshold
