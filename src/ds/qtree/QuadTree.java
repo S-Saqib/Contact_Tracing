@@ -519,7 +519,6 @@ public class QuadTree {
                     long qNodeIndex = node.getZCode();
                     TransformedTrajPoint transformedTrajPoint = new TransformedTrajPoint(qNodeIndex, timeIndex);
                     String trajId = (String)point.getTraj_id();
-                    if (zCode == 4551) System.out.println("Transforming trajectory " + trajId);
                     // trajStorage.addValueToTransformedTrajData(trajId, transformedTrajPoint);
                     // zCode of root is a unique identifier of quadtree, so passing it for traj identification
                     trajStorage.addTransformedTrajValue(zCode, trajId, transformedTrajPoint);
