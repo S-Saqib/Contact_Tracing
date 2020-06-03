@@ -19,14 +19,14 @@ import javax.xml.ws.Response;
 public class QuadTree {
 
 
-    private Node root_;
+    private final Node root_;
     private int count_;
     private int nodeCount;
     private long zCode;
     private int height;
-    private TrajStorage trajStorage;
-    private long minTimeInSec;
-    private int timeWindowInSec;
+    private final TrajStorage trajStorage;
+    private final long minTimeInSec;
+    private final int timeWindowInSec;
     
     /**
      * Constructs a new quad tree.
@@ -77,6 +77,14 @@ public class QuadTree {
         return splitCount;
     }
 
+    public void setzCode(long zCode) {
+        this.zCode = zCode;
+    }
+
+    public long getzCode() {
+        return zCode;
+    }
+        
     /**
      * Gets the value of the point at (x, y) or null if the point is empty.
      *
@@ -431,6 +439,20 @@ public class QuadTree {
         node.incPointCount();
     }
     
+    private void addPointToQId_Node(Node node, Point point) {
+        if (node.getNodeType() == NodeType.POINTER) {
+            System.out.println("Can not set point for node of type POINTER for node " + node);
+            throw new QuadTreeException("Can not set point for node of type POINTER");
+        }
+        if (node.getNodeType() != NodeType.LEAF) node.setNodeType(NodeType.LEAF);
+        // ArrayList <Point> points= node.getPoints();
+        // if (points == null) points = new ArrayList<Point>();
+        // points.add(point);
+        // node.setPoints(points);
+        trajStorage.addPointToQId_QNode(zCode, node, point);
+        node.incPointCount();
+    }
+    
     public int getTimeIndex(long timeStamp){
         if (timeStamp < minTimeInSec) return -1;
         return (int)((timeStamp - minTimeInSec)/timeWindowInSec);
@@ -454,22 +476,23 @@ public class QuadTree {
         return zCode;
     }
     
-    // saves transformed trajectories in trajStorage, the spatio-temporal transformation works on their points
     public void transformTrajectories(Node node){
         if (node.getNodeType() == NodeType.EMPTY){
             // just added for safety, should not reach here
             return;
         }
         if (node.getNodeType() == NodeType.LEAF){
+            // ArrayList <Point> pointList = trajStorage.getPointsFromQId_QNode(this.zCode, node);
             ArrayList <Point> pointList = trajStorage.getPointsFromQNode(node);
             for (Point point : pointList){
                 int timeIndex = getTimeIndex(point.getTimeInSec());
                 node.addTimeKey(timeIndex);
-                if (timeIndex > 0){
+                if (timeIndex >= 0){
                     long qNodeIndex = node.getZCode();
                     TransformedTrajPoint transformedTrajPoint = new TransformedTrajPoint(qNodeIndex, timeIndex);
                     String trajId = (String)point.getTraj_id();
                     trajStorage.addValueToTransformedTrajData(trajId, transformedTrajPoint);
+                    // zCode of root is a unique identifier of quadtree, so passing it for traj identification
                 }
             }
             return;
@@ -478,6 +501,36 @@ public class QuadTree {
         transformTrajectories(node.getNe());
         transformTrajectories(node.getSw());
         transformTrajectories(node.getSe());
+    }
+
+    // saves transformed trajectories in trajStorage, the spatio-temporal transformation works on their points
+    public void transformTrajectoriesQ2R(Node node){
+        if (node.getNodeType() == NodeType.EMPTY){
+            // just added for safety, should not reach here
+            return;
+        }
+        if (node.getNodeType() == NodeType.LEAF){
+            // ArrayList <Point> pointList = trajStorage.getPointsFromQId_QNode(this.zCode, node);
+            ArrayList <Point> pointList = trajStorage.getPointsFromQNode(node);
+            for (Point point : pointList){
+                int timeIndex = getTimeIndex(point.getTimeInSec());
+                node.addTimeKey(timeIndex);
+                if (timeIndex >= 0){
+                    long qNodeIndex = node.getZCode();
+                    TransformedTrajPoint transformedTrajPoint = new TransformedTrajPoint(qNodeIndex, timeIndex);
+                    String trajId = (String)point.getTraj_id();
+                    if (zCode == 4551) System.out.println("Transforming trajectory " + trajId);
+                    // trajStorage.addValueToTransformedTrajData(trajId, transformedTrajPoint);
+                    // zCode of root is a unique identifier of quadtree, so passing it for traj identification
+                    trajStorage.addTransformedTrajValue(zCode, trajId, transformedTrajPoint);
+                }
+            }
+            return;
+        }
+        transformTrajectoriesQ2R(node.getNw());
+        transformTrajectoriesQ2R(node.getNe());
+        transformTrajectoriesQ2R(node.getSw());
+        transformTrajectoriesQ2R(node.getSe());
     }
     
     public void makeTimeIndex(Node node){
@@ -510,9 +563,15 @@ public class QuadTree {
             // using rtree, it is around 2.9 for different datasets, so used 3
             for (Point point : pointList){
                 int timeIndex = getTimeIndex(point.getTimeInSec());
-                if (timeIndex > 0){
+                if (timeIndex >= 0){
                     String trajId = (String)point.getTraj_id();
-                    Object diskBlockId = trajStorage.getDiskBlockIdByTrajId(trajId);
+                    Object diskBlockId = null;
+                    try{
+                        diskBlockId = trajStorage.getQId_DiskBlockIdByTrajId(trajId).getValue1();
+                    } catch (NullPointerException E){
+                        diskBlockId = trajStorage.getDiskBlockIdByTrajId(trajId);
+                    }
+                    
                     // this is the logic of getting block id, calculated directly without help of trajStorage
                     // Object diskBlockId = (int)(trajStorage.getTrajectoryById(trajId).getUserId() / avgTrajPerBlk);
                     node.addDiskBlockId(timeIndex, diskBlockId);
@@ -537,7 +596,7 @@ public class QuadTree {
             // using rtree, it is around 2.9 for different datasets, so used 3
             for (Point point : pointList){
                 int timeIndex = getTimeIndex(point.getTimeInSec());
-                if (timeIndex > 0){
+                if (timeIndex >= 0){
                     String trajId = (String)point.getTraj_id();
                     // this is the logic of getting block id, calculated directly without help of trajStorage
                     Object diskBlockId = (int)(trajStorage.getTrajectoryById(trajId).getUserId() / avgTrajPerBlk);

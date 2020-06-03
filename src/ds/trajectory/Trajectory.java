@@ -1,5 +1,6 @@
 package ds.trajectory;
 
+import com.vividsolutions.jts.geom.Envelope;
 import java.util.TreeSet;
 
 public class Trajectory {
@@ -8,12 +9,14 @@ public class Trajectory {
     private long userId;
     private String anonymizedId;
     private String contactNo;
+    private Envelope spatialEnv;
 
     public Trajectory() {
         pointList = new TreeSet<TrajPoint>(new TrajPointComparator());
         anonymizedId = new String();
         contactNo = null;
         userId = -1;
+        spatialEnv = new Envelope();
     }
     
     public Trajectory(String anonymizedId, long userId){
@@ -21,6 +24,7 @@ public class Trajectory {
         this.anonymizedId = anonymizedId;
         this.userId = userId;
         contactNo = null;
+        spatialEnv = new Envelope();
     }
     
     public Trajectory(TreeSet<TrajPoint> pointList) {
@@ -28,6 +32,7 @@ public class Trajectory {
         anonymizedId = new String();
         contactNo = null;
         userId = -1;
+        spatialEnv = new Envelope();
     }
     
     public void setPointList(TreeSet<TrajPoint> pointList) {
@@ -68,6 +73,21 @@ public class Trajectory {
             pointList = new TreeSet<TrajPoint>(new TrajPointComparator());
         }
         pointList.add(p);
+    }
+
+    public Envelope getSpatialEnv() {
+        return spatialEnv;
+    }
+
+    public void setSpatialEnv(Envelope trajSpatialEnv) {
+        this.spatialEnv = trajSpatialEnv;
+    }
+    
+    public void setSpatialEnv(){
+        if (pointList == null || pointList.isEmpty()) return;
+        for(TrajPoint trajPoint : pointList){
+            spatialEnv.expandToInclude(trajPoint.getPointLocation());
+        }
     }
     
     public boolean contains(TrajPoint p){

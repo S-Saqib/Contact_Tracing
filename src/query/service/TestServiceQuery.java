@@ -86,4 +86,44 @@ public class TestServiceQuery {
         //zOrderTime /= numberOfRuns;
         //System.out.println (naiveTime + "\n" + zOrderTime);
     }
+    
+    public static ArrayList<Double> runQ2R(TrajStorage trajStorage, TQIndex quadTrajTree, ArrayList<Trajectory> facilityGraph,
+                            double latDisThreshold, double lonDisThreshold, long temporalDisThreshold, int maxRecursionDepth) {
+
+            ServiceQueryProcessor processQuery = new ServiceQueryProcessor(trajStorage, quadTrajTree, latDisThreshold, lonDisThreshold, temporalDisThreshold);
+            HashMap<String, TreeSet<TrajPoint>> infectedContacts = new HashMap<String, TreeSet<TrajPoint>>();
+            // infectedContacts = processQuery.evaluateService(quadTrajTree.getQuadTree().getRootNode(), facilityGraph, infectedContacts);
+            HashSet<String> alreadyInfectedIds = new HashSet<String>();
+            alreadyInfectedIds.add(facilityGraph.get(0).getAnonymizedId());
+            int maxLevel = maxRecursionDepth;
+            
+            long fromTime = System.nanoTime();
+            for (int level=1; level<=maxLevel; level++){
+                infectedContacts = processQuery.evaluateService(quadTrajTree.getQuadTree().getRootNode(), facilityGraph, infectedContacts, alreadyInfectedIds);
+                facilityGraph.clear();
+                for (HashMap.Entry<String, TreeSet<TrajPoint>> entry : infectedContacts.entrySet()){
+                    Trajectory newlyInfected = trajStorage.getTrajectoryById(entry.getKey());
+                    Trajectory infectedPortion = new Trajectory();
+                    infectedPortion.setAnonymizedId(newlyInfected.getAnonymizedId());
+                    infectedPortion.setUserId(newlyInfected.getUserId());
+                    infectedPortion.setContactNo(newlyInfected.getContactNo());
+                    infectedPortion.setPointList(newlyInfected.getPointList());
+                    
+                    if (infectedPortion == null || infectedPortion.getPointList() == null || infectedPortion.getPointList().size() == 0) continue;
+                    infectedPortion.setPointList((TreeSet<TrajPoint>) infectedPortion.getPointList().tailSet(entry.getValue().first()));
+                    facilityGraph.add(infectedPortion);
+                    alreadyInfectedIds.add(entry.getKey());
+                }
+            }
+            long toTime = System.nanoTime();
+            
+            System.out.println(" : " + infectedContacts.size());
+            ArrayList <Double> timeIO = new ArrayList<Double>();
+            timeIO.add((toTime-fromTime)/1.0e9);
+            timeIO.add(processQuery.getQ2RBlocksAccessed()*1.0);
+            //timeIO.add(processQuery.getTrajectoriesAccessed()*1.0);
+            timeIO.add(infectedContacts.size()*1.0);
+            //processQuery.clearBlocksAccessed();
+            return timeIO;
+    }
 }

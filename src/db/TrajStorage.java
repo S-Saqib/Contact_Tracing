@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import org.javatuples.Pair;
 
 /**
  *
@@ -23,11 +24,15 @@ import java.util.Map;
 public class TrajStorage {
     private HashMap<String, Trajectory> trajData;
     private HashMap<String, TransformedTrajectory> transformedTrajData;
+    private HashMap<Long, HashMap<String, TransformedTrajectory>> quadtreeWiseTransformedTrajData;
     private final int chunkSize;
     private int cursor;
     private HashMap<Node, ArrayList<Point>> tempQNodeToPointListMap;
+    private HashMap<Long, HashMap<Node, ArrayList<Point>>> tempQId_QNodeToPointListMap;
     private HashMap<String, Integer> trajIdToDiskBlockIdMap;
     private HashMap<Integer, ArrayList<String>> diskBlockIdToTrajIdListMap;
+    private HashMap<String, Pair<Long, Integer>> trajIdToQId_DiskBlockIdMap;
+    private HashMap<Pair<Long, Integer>, ArrayList<String>> qId_diskBlockIdToTrajIdListMap;
     private ArrayList<String> []pointWiseTrajIdList;
     
     public TrajStorage(HashMap<String, Trajectory> trajData) {
@@ -35,8 +40,11 @@ public class TrajStorage {
         chunkSize = 10000;
         cursor = 0;
         this.tempQNodeToPointListMap = new HashMap<Node, ArrayList<Point>>();
+        this.tempQId_QNodeToPointListMap = new HashMap<Long, HashMap<Node, ArrayList<Point>>>();
         this.transformedTrajData = new HashMap<String, TransformedTrajectory>();
+        this.quadtreeWiseTransformedTrajData = new HashMap<>();
         this.diskBlockIdToTrajIdListMap = new HashMap<Integer, ArrayList<String>>();
+        this.qId_diskBlockIdToTrajIdListMap = new HashMap<>();
     }
 
     public TrajStorage() {
@@ -44,8 +52,11 @@ public class TrajStorage {
         chunkSize = 100;
         cursor = 0;
         this.tempQNodeToPointListMap = null;
+        this.tempQId_QNodeToPointListMap = null;
         this.transformedTrajData = null;
+        this.quadtreeWiseTransformedTrajData = null;
         this.diskBlockIdToTrajIdListMap = null;
+        this.qId_diskBlockIdToTrajIdListMap = null;
     }
 
     public HashMap<String, Trajectory> getTrajData() {
@@ -106,6 +117,26 @@ public class TrajStorage {
         tempQNodeToPointListMap.get(qNode).add(point);
     }
     
+    public ArrayList<Point> getPointsFromQId_QNode(Long qId, Node qNode){
+        if (tempQId_QNodeToPointListMap.containsKey(qId)){
+            if (tempQId_QNodeToPointListMap.get(qId).containsKey(qNode)){
+                return tempQNodeToPointListMap.get(qNode);
+            }
+        }
+        return null;
+    }
+    
+    public void addPointToQId_QNode(Long qId, Node qNode, Point point){
+        if (!tempQId_QNodeToPointListMap.containsKey(qId)){
+            tempQId_QNodeToPointListMap.put(qId, new HashMap<Node, ArrayList<Point>>());
+            tempQId_QNodeToPointListMap.get(qId).put(qNode, new ArrayList<Point>());
+        }
+        else if (!tempQId_QNodeToPointListMap.get(qId).containsKey(qNode)){
+            tempQId_QNodeToPointListMap.get(qId).put(qNode, new ArrayList<Point>());
+        }
+        tempQId_QNodeToPointListMap.get(qId).get(qNode).add(point);
+    }
+    
     // a node should be removed after it is no longer leaf (becomes pointer)
     public void removePointListFromQNode(Node qNode){
         if (tempQNodeToPointListMap.containsKey(qNode)){
@@ -135,6 +166,14 @@ public class TrajStorage {
         return transformedTrajectory;
     }
     
+    public HashMap<Long, HashMap<String, TransformedTrajectory>> getQuadtreeWiseTransformedTrajData() {
+        return quadtreeWiseTransformedTrajData;
+    }
+    
+    public HashMap<String, TransformedTrajectory> getTransformedTrajDataByQuadtreeId(long quadtreeId) {
+        return quadtreeWiseTransformedTrajData.get(quadtreeId);
+    }
+    
     public void addKeyToTransformedTrajData(String id){
         if (!transformedTrajData.containsKey(id)){
             // using the same method ignoring the second parameter
@@ -145,6 +184,23 @@ public class TrajStorage {
     public void addValueToTransformedTrajData(String id, TransformedTrajPoint transformedTrajPoint){
         addKeyToTransformedTrajData(id);
         transformedTrajData.get(id).addTransformedTrajPoint(transformedTrajPoint);
+    }
+    
+    public void addQuadtreeIdKey(long quadtreeId){
+        if (!quadtreeWiseTransformedTrajData.containsKey(quadtreeId)){
+            // using the same method ignoring the second parameter
+            quadtreeWiseTransformedTrajData.put(quadtreeId, new HashMap<String, TransformedTrajectory>());
+        }
+    }
+    
+    public void addTrajIdKey(long quadtreeId, String trajId){
+        addQuadtreeIdKey(quadtreeId);
+        quadtreeWiseTransformedTrajData.get(quadtreeId).put(trajId, new TransformedTrajectory(trajId, -1));
+    }
+    
+    public void addTransformedTrajValue(long quadtreeId, String trajId, TransformedTrajPoint transformedTrajPoint){
+        addTrajIdKey(quadtreeId, trajId);
+        quadtreeWiseTransformedTrajData.get(quadtreeId).get(trajId).addTransformedTrajPoint(transformedTrajPoint);
     }
 
     public HashMap<String, Integer> getTrajIdToDiskBlockIdMap() {
@@ -163,6 +219,25 @@ public class TrajStorage {
                 diskBlockIdToTrajIdListMap.put(blockId, new ArrayList<String>());
             }
             diskBlockIdToTrajIdListMap.get(blockId).add(trajId);
+        }
+    }
+    
+    public HashMap<String, Pair<Long, Integer>> getTrajIdToQId_DiskBlockIdMap() {
+        return trajIdToQId_DiskBlockIdMap;
+    }
+
+    public void setTrajIdToQId_DiskBlockIdMap(HashMap<String, Pair<Long, Integer>> trajIdToQId_DiskBlockIdMap) {
+        this.trajIdToQId_DiskBlockIdMap = trajIdToQId_DiskBlockIdMap;
+    }
+    
+    public void setQId_DiskBlockIdToTrajIdListMap(){
+        for (Map.Entry<String, Pair<Long, Integer>> entry : trajIdToQId_DiskBlockIdMap.entrySet()) {
+            String trajId = entry.getKey();
+            Pair<Long, Integer> qId_blockId = entry.getValue();
+            if (!qId_diskBlockIdToTrajIdListMap.containsKey(qId_blockId)){
+                qId_diskBlockIdToTrajIdListMap.put(qId_blockId, new ArrayList<String>());
+            }
+            qId_diskBlockIdToTrajIdListMap.get(qId_blockId).add(trajId);
         }
     }
     
@@ -186,9 +261,20 @@ public class TrajStorage {
         return trajIdToDiskBlockIdMap.get(id);
     }
     
+    public Pair<Long, Integer> getQId_DiskBlockIdByTrajId(String id){
+        if (!trajIdToQId_DiskBlockIdMap.containsKey(id)) return null;
+        return trajIdToQId_DiskBlockIdMap.get(id);
+    }
+    
     public ArrayList<String> getTrajIdListByBlockId(Integer blockId){
         if (!diskBlockIdToTrajIdListMap.containsKey(blockId)) return null;
         return diskBlockIdToTrajIdListMap.get(blockId);
+    }
+    
+    public ArrayList<String> getTrajIdListByQId_BlockId(Long qId, Integer blockId){
+        Pair <Long, Integer> key = new Pair<Long, Integer>(qId, blockId);
+        if (!qId_diskBlockIdToTrajIdListMap.containsKey(key)) return null;
+        return qId_diskBlockIdToTrajIdListMap.get(key);
     }
     
     public void printTrajectories(){

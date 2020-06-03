@@ -38,15 +38,15 @@ public class TQIndex {
     
     // maintaining a map of trajectory ids contained in qNode, will remove later unless needed
     public Map<Node, ArrayList<String>> qNodeToAnonymizedTrajIdsMap;
-    // cannot maintain the aforementioned map with the value as arraylist, here we need a quadtree as value, as follows
+    // second level quadtrees mapped to first level quadtree nodes
     public Map<Node, QuadTree> qNodeToNextLevelIndexMap;
     
     //public double latCoeff = 0, latConst = 0, lonCoeff = 0, lonConst = 0;
     // these coefficients and constants may be needed to get back the actual longitudes, latitudes of trajectories later
-    private double latCoeff, latConst, lonCoeff, lonConst;
-    private double maxLat, maxLon, minLat, minLon;
-    private long minTimeInSec;
-    private int timeWindowInSec;
+    private final double latCoeff, latConst, lonCoeff, lonConst;
+    private final double maxLat, maxLon, minLat, minLon;
+    private final long minTimeInSec;
+    private final int timeWindowInSec;
     
     public TQIndex(TrajStorage trajStorage, double latCoeff, double latConst, double lonCoeff, double lonConst,
                     double maxLat, double maxLon, double minLat, double minLon, long minTimeInSec, int timeWindowInSec) {
@@ -89,11 +89,72 @@ public class TQIndex {
             trajectories = this.trajStorage.getNextChunkAsList();
         }
         
-        // assuming zCode starts from 0 (the second argument)
-        quadTree.assignZCodesToLeaves(quadTree.getRootNode(), 0);
+        //q2r-tree
+        {
+            // removing redundant temporary information
+            trajStorage.clearQNodeToPointListMap();
+            // cursor set to beginning automatically, so reading next chunk will not return null
+            trajectories = this.trajStorage.getNextChunkAsList();
+            while(trajectories != null){
+                addTrajectories(trajectories);
+                trajectories = this.trajStorage.getNextChunkAsList();
+            }
+            
+            long incrementingZCode = 0;
+            for (HashMap.Entry<Node, QuadTree> entry : qNodeToNextLevelIndexMap.entrySet()){
+                Node node = entry.getKey();
+                QuadTree secondLevelQuadTree = entry.getValue();
+                ArrayList<String> trajIdList = qNodeToAnonymizedTrajIdsMap.get(node);
+                for (String trajId : trajIdList) {
+                    Trajectory trajectory = trajStorage.getTrajectoryById(trajId);
+                    String anonymizedTrajId = trajectory.getAnonymizedId();
+                    int pointCount = 0;
+                    for (TrajPoint trajPoint : trajectory.getPointList()){
+                        double trajPointX = trajPoint.getPointLocation().x;
+                        double trajPointY = trajPoint.getPointLocation().y;
+                        long trajPointTimeInSec = trajPoint.getTimeInSec();
+                        try{
+                            secondLevelQuadTree.set(trajPointX, trajPointY, trajPointTimeInSec, new Integer(pointCount++), anonymizedTrajId);
+                        }
+                        catch(Exception E){
+                            Node root = secondLevelQuadTree.getRootNode();
+                            double fromX = root.getX();
+                            double fromY = root.getY();
+                            double toX = fromX + root.getW();
+                            double toY = fromY + root.getH();
+                            System.out.println("Quadtree boundary = (" + fromX + "," + fromY + ") , (" + toX + "," + toY + "), ZCode = " + incrementingZCode);
+                            System.out.println("Point to be inserted = " + trajPointX + "," + trajPointY);
+                            System.exit(0);
+                        }
+                    }
+                }
+                
+                if (secondLevelQuadTree == null || secondLevelQuadTree.getRootNode().getNodeType() == NodeType.EMPTY) continue;
+                
+                secondLevelQuadTree.setzCode(incrementingZCode);
+                incrementingZCode = secondLevelQuadTree.assignZCodesToLeaves(secondLevelQuadTree.getRootNode(), incrementingZCode);
+                incrementingZCode++;
+                // coordinate transformation
+                secondLevelQuadTree.transformTrajectoriesQ2R(secondLevelQuadTree.getRootNode());
+                // trajStorage.printTrajectories();
+                
+                // grouping trajectories in transformed coordinates under each 2nd level quadtree
+                Rtree rTree = new Rtree(trajStorage.getTransformedTrajDataByQuadtreeId(secondLevelQuadTree.getzCode()));
+                trajStorage.setTrajIdToQId_DiskBlockIdMap((rTree.getTrajectoryToQId_LeafMapping(secondLevelQuadTree.getzCode())));
+                trajStorage.setQId_DiskBlockIdToTrajIdListMap();
+                // assigning block no. to qNode leaves
+                secondLevelQuadTree.tagDiskBlockIdsToNodes(secondLevelQuadTree.getRootNode());
+                
+                // removing redundant temporary information
+                trajStorage.clearQNodeToPointListMap();
+            }
+        }
         
+        /*
         // qr-tree
         {
+            // assuming zCode starts from 0 (the second argument)
+            quadTree.assignZCodesToLeaves(quadTree.getRootNode(), 0);
             // coordinate transformation
             quadTree.transformTrajectories(quadTree.getRootNode());
             // trajStorage.printTrajectories();
@@ -104,11 +165,16 @@ public class TQIndex {
             trajStorage.setDiskBlockIdToTrajIdListMap();
             // assigning block no. to qNode leaves
             quadTree.tagDiskBlockIdsToNodes(quadTree.getRootNode());
+            // removing redundant temporary information
+            trajStorage.clearQNodeToPointListMap();
         }
+        */
         
         /*
         // q-tree
         {
+            // assuming zCode starts from 0 (the second argument)
+            // quadTree.assignZCodesToLeaves(quadTree.getRootNode(), 0);
             // adding time info as keys in the maps associated with each node
             // it was directly done in the transformTrajectories method previously
             quadTree.makeTimeIndex(quadTree.getRootNode());
@@ -118,17 +184,8 @@ public class TQIndex {
             trajStorage.setTrivialDiskBlockIdToTrajIdListMap();
             // assigning block no. to qNode leaves
             quadTree.tagTrivialDiskBlockIdsToNodes(quadTree.getRootNode());
-        }
-        */
-        // removing redundant temporary information
-        trajStorage.clearQNodeToPointListMap();
-        
-        /* need to work on the following part for (Q^2)R tree
-        // cursor set to beginning automatically, so reading next chunk will not return null
-        trajectories = this.trajStorage.getNextChunkAsList();
-        while(trajectories != null){
-            addTrajectories(trajectories);
-            trajectories = this.trajStorage.getNextChunkAsList();
+            // removing redundant temporary information
+            trajStorage.clearQNodeToPointListMap();
         }
         */
     }
@@ -137,39 +194,23 @@ public class TQIndex {
         for (Trajectory trajectory : trajectories) {
             Node node = addTrajectory(quadTree.getRootNode(), trajectory);
             
-            if (!qNodeToAnonymizedTrajIdsMap.containsKey(node)) {
-                qNodeToAnonymizedTrajIdsMap.put(node, new ArrayList<String>());
+            if (!qNodeToNextLevelIndexMap.containsKey(node)) {
                 qNodeToNextLevelIndexMap.put(node, new QuadTree(trajStorage, node.getX(), node.getY(), node.getX() + node.getW(), node.getY() + node.getH(),
                                                                 minTimeInSec, timeWindowInSec));
+                qNodeToAnonymizedTrajIdsMap.put(node, new ArrayList<String>());
             }
             String anonymizedTrajId = trajectory.getAnonymizedId();
             qNodeToAnonymizedTrajIdsMap.get(node).add(anonymizedTrajId);
-            int pointCount = 0;
-            for (TrajPoint trajPoint : trajectory.getPointList()){
-                double trajPointX = trajPoint.getPointLocation().x;
-                double trajPointY = trajPoint.getPointLocation().y;
-                long trajPointTimeInSec = trajPoint.getTimeInSec();
-                qNodeToNextLevelIndexMap.get(node).set(trajPointX, trajPointY, trajPointTimeInSec, new Integer(pointCount++), anonymizedTrajId);
-            }
         }
     }
 
     private Node addTrajectory(Node node, Trajectory trajectory) {
-
-        if (qNodeTrajsCount.get(node) == null) {
-            qNodeTrajsCount.put(node, 0);
-        }
-        qNodeTrajsCount.put(node, qNodeTrajsCount.get(node) + 1);
         
         if (node.getNodeType() == NodeType.LEAF){
             return node;
         }
         
-        Envelope trajEnv = new Envelope();
-
-        for (TrajPoint trajPoint: trajectory.getPointList()) {
-            trajEnv.expandToInclude(trajPoint.getPointLocation());
-        }
+        Envelope trajEnv = trajectory.getSpatialEnv();
         
         Envelope envNe = getNodeEnvelop(node.getNe());
         if (!envNe.contains(trajEnv) && envNe.intersects(trajEnv)) {

@@ -118,6 +118,11 @@ public class TrajParser {
         TrajNormalizer trajNormalizer = new TrajNormalizer();
         allTrajectories = trajNormalizer.normalize(allTrajectories, minLon, minLat, maxLon, maxLat);
         
+        for (HashMap.Entry<String,Trajectory> entry : allTrajectories.entrySet()){
+            Trajectory trajectory = entry.getValue();
+            trajectory.setSpatialEnv();
+        }
+        
         // the denormalizing variables are updated
         latCoeff = (maxLat/100.0-minLat/100.0);
         latConst = minLat;

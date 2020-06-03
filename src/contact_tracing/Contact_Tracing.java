@@ -108,11 +108,12 @@ public class Contact_Tracing {
                                 //facilityGraph.add(trajStorage.getTrajectoryById(trajStorage.getTrajDataAsList().get(0).getAnonymizedId()));
                                 //System.out.println(facilityGraph.get(0).getPointList().size());
                                 Trajectory inputTraj = trajStorage.getQueryTrajectory(tLenId);
+                                // Trajectory inputTraj = trajStorage.getTrajectoryById("AAH03JAAQAAAO9WAFx");
                                 String inputTrajId = new String(inputTraj.getAnonymizedId());
                                 int points = inputTraj.getPointList().size();
                                 System.out.print(inputTrajId + " " + points);
-                                facilityGraph.add(trajStorage.getQueryTrajectory(tLenId));
-                                ArrayList<Double> measures = TestServiceQuery.run(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, tProx, recDepth);
+                                facilityGraph.add(inputTraj);
+                                ArrayList<Double> measures = TestServiceQuery.runQ2R(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, tProx, recDepth);
                                 t += measures.get(0);
                                 io += measures.get(1);
                                 //ioTraj += measures.get(2);
