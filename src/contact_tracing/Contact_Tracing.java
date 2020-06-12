@@ -5,12 +5,16 @@
  */
 package contact_tracing;
 
+import com.vividsolutions.jts.util.Assert;
 import db.TrajStorage;
 import java.io.IOException;
 import ds.qtrajtree.TQIndex;
 import ds.trajectory.Trajectory;
 import io.real.TrajParser;
+import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,14 +36,108 @@ public class Contact_Tracing {
     public static void main(String[] args) throws IOException, FileNotFoundException, ParseException {
         
         int numberOfRuns = 100;
-        int[] dataSetSizes = {10, 25, 50, 100}; //k
+        // runCellPhoneExp(numberOfRuns);
+        runNYFExp(numberOfRuns);
+        // runDev();
+    }
+    
+    private static void runDev() throws IOException, FileNotFoundException, ParseException{
+        double spatialProximity = 2; // should be around 13 feet for example
+        // 1, 2 (default), 4, 10
+        String proximityUnit = "m"; // it can be "m", "km", "mile" and "ft"
+        
+        long temporalProximity = 30; // in minutes, may be anything around 5 to 240 for example
+        // 15, 30 (default), 60, 180
+        temporalProximity *= 60;    // in seconds
+        
+        int timeWindowInSec = 30*60;
+        // using default temporal proximity as the time window used in index
+        
+        int maxRecursionDepth = 1;
+        
+        String userTrajectoryFilePath = "../Data/NYC_Multipoint.csv";
+        // parse, preprocess and normalize trajectory data
+        TrajParser trajParser = new TrajParser();
+        // HashMap<String, Trajectory> userTrajectories = trajParser.parseUserTrajectories(userTrajectoryFilePath);
+        HashMap<String, Trajectory> userTrajectories = trajParser.parseNYFTrajectories(userTrajectoryFilePath);
+        System.out.println("Trajectory Parsed");
+        
+        // create an object of TrajStorage to imitate database functionalities
+        TrajStorage trajStorage = new TrajStorage(userTrajectories);
+        // trajStorage.prepareQueryDataset();
+        // trajStorage.generateRandomTrajIds(numberOfRuns);
+        
+        
+        // build index on the trajectory data (assuming we have all of it in memory)
+        long fromTime = System.nanoTime();
+        TQIndex quadTrajTree = new TQIndex(trajStorage, trajParser.getLatCoeff(), trajParser.getLatConst(), trajParser.getLonCoeff(), trajParser.getLonConst(), 
+                            trajParser.getMaxLat(), trajParser.getMaxLon(), trajParser.getMinLat(), trajParser.getMinLon(), trajParser.getMinTimeInSec(), timeWindowInSec);
+        long toTime = System.nanoTime();
+        System.out.println("Index built for " + userTrajectories.size() + " Trajs, time: " + (toTime-fromTime)/1.0e9);
+            
+        // show some statistics of the recently built index
+        Statistics stats = new Statistics(quadTrajTree);
+        stats.printStats();
+
+        // show the indexed trajectories visually along with the appropriate q-nodes
+        quadTrajTree.draw();
+        
+        String queryTrajFilePath = "../Data/NYF_Random_Query_Traj_Ids.txt";
+        File userTrajectoryFile = new File(queryTrajFilePath);
+        Assert.isTrue(userTrajectoryFile.exists(), "query trajectory file not found");
+            
+        for (int recDepth = 1; recDepth <= 3; recDepth++){
+            
+            BufferedReader br = null;
+            String line = new String();
+
+            br = new BufferedReader(new FileReader(queryTrajFilePath));
+
+            // calculating spatial proximity
+            DistanceConverter distanceConverter = new DistanceConverter(trajParser.getMaxLon(), trajParser.getMaxLat(),
+                                                                                trajParser.getMinLon(), trajParser.getMinLat());
+            double latProximity = distanceConverter.getLatProximity(spatialProximity, proximityUnit);
+            double lonProximity = distanceConverter.getLonProximity(spatialProximity, proximityUnit);
+                    
+            ArrayList <Trajectory> facilityGraph = new ArrayList<Trajectory>();
+            // The following trajectory will be received as input
+            //facilityGraph.add(trajStorage.getTrajectoryById("AAH03JAAQAAAO9VAA/"));
+            //facilityGraph.add(trajStorage.getTrajectoryById(trajStorage.getTrajDataAsList().get(0).getAnonymizedId()));
+            //System.out.println(facilityGraph.get(0).getPointList().size());
+            // Trajectory inputTraj = trajStorage.getQueryTrajectory(tLenId);
+            /*
+            int queryTrajFileLineNo = 15;
+            for (int i=1; i<queryTrajFileLineNo; i++) br.readLine();
+            */
+            
+            Trajectory inputTraj = trajStorage.getTrajectoryById(br.readLine());
+            // Trajectory inputTraj = trajStorage.getTrajectoryById("AAH03JAAQAAAO9WAFx");
+            String inputTrajId = new String(inputTraj.getAnonymizedId());
+            int points = inputTraj.getPointList().size();
+            System.out.print(inputTrajId + " - " + points);
+            facilityGraph.add(inputTraj);
+            ArrayList<Double> measures = TestServiceQuery.runQ2R(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, temporalProximity, recDepth);
+            // ArrayList<Double> measures = TestServiceQuery.run(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, tProx, recDepth);
+            double t = measures.get(0);
+            double io = measures.get(1);
+            //ioTraj += measures.get(2);
+            double infectedCount = measures.get(2);
+
+            System.out.println("\nParameters: " + userTrajectories.size() + " Trajs (NYF dataset), " + spatialProximity + " Meters, " + temporalProximity/60 +
+                    " Minutes, Upto Level " + recDepth + "\nTime = " + t + " , IO = " + io + " Avg. Infected = " + infectedCount + "\n");
+                
+        }
+    }
+    
+    private static void runCellPhoneExp(int numberOfRuns) throws IOException, FileNotFoundException, ParseException{
+        int[] dataSetSizes = {10, 25, 50, 100, 150, 200}; //k
         // 10k, 25k, 50k (default), 100k
         int defaultDataSetSize = 50;    // k
         double[] spatialProximityValues = {1, 2, 4, 10};
         double spatialProximity = 2; // should be around 13 feet for example
         // 1, 2 (default), 4, 10
         String proximityUnit = "m"; // it can be "m", "km", "mile" and "ft"
-        long[] temporalProximityValues = {15*60, 30*60, 60*60, 180*60};
+        long[] temporalProximityValues = {1*60, 15*60, 30*60, 60*60, 180*60};
         long temporalProximity = 30; // in minutes, may be anything around 5 to 240 for example
         // 15, 30 (default), 60, 180
         temporalProximity *= 60;    // in seconds
@@ -52,7 +150,7 @@ public class Contact_Tracing {
         int maxRecursionDepth = 1;
         
         for (int dataSetSize : dataSetSizes){
-            String userTrajectoryFilePath = "../Data/sample_" + dataSetSize + "k_traj.txt";
+         String userTrajectoryFilePath = "../Data/sample_" + dataSetSize + "k_traj.txt";
             // parse, preprocess and normalize trajectory data
             TrajParser trajParser = new TrajParser();
             HashMap<String, Trajectory> userTrajectories = trajParser.parseUserTrajectories(userTrajectoryFilePath);
@@ -93,6 +191,7 @@ public class Contact_Tracing {
                             
                             if (recDepth > 1) numberOfRuns = 10;
                             else numberOfRuns = 100;
+                            
                             // calculating spatial proximity
                             DistanceConverter distanceConverter = new DistanceConverter(trajParser.getMaxLon(), trajParser.getMaxLat(),
                                                                                         trajParser.getMinLon(), trajParser.getMinLat());
@@ -111,9 +210,10 @@ public class Contact_Tracing {
                                 // Trajectory inputTraj = trajStorage.getTrajectoryById("AAH03JAAQAAAO9WAFx");
                                 String inputTrajId = new String(inputTraj.getAnonymizedId());
                                 int points = inputTraj.getPointList().size();
-                                System.out.print(inputTrajId + " " + points);
+                                System.out.print(inputTrajId + " - " + points);
                                 facilityGraph.add(inputTraj);
                                 ArrayList<Double> measures = TestServiceQuery.runQ2R(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, tProx, recDepth);
+                                // ArrayList<Double> measures = TestServiceQuery.run(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, tProx, recDepth);
                                 t += measures.get(0);
                                 io += measures.get(1);
                                 //ioTraj += measures.get(2);
@@ -133,6 +233,110 @@ public class Contact_Tracing {
                             System.out.println("Time = " + t + " , IO = " + io + " Avg. Infected = " + infectedCount + "\n");
                         }
                     }
+                }
+            }
+        }
+    }
+    
+    private static void runNYFExp(int numberOfRuns) throws IOException, FileNotFoundException, ParseException{
+        
+        double[] spatialProximityValues = {1, 2, 4, 10};
+        double spatialProximity = 2; // should be around 13 feet for example
+        // 1, 2 (default), 4, 10
+        String proximityUnit = "m"; // it can be "m", "km", "mile" and "ft"
+        long[] temporalProximityValues = {1*60, 15*60, 30*60, 60*60, 180*60};
+        long temporalProximity = 30; // in minutes, may be anything around 5 to 240 for example
+        // 15, 30 (default), 60, 180
+        temporalProximity *= 60;    // in seconds
+        
+        int timeWindowInSec = 30*60;
+        // using default temporal proximity as the time window used in index
+        
+        int maxRecursionDepth = 1;
+        
+        String userTrajectoryFilePath = "../Data/NYC_Multipoint.csv";
+        // parse, preprocess and normalize trajectory data
+        TrajParser trajParser = new TrajParser();
+        // HashMap<String, Trajectory> userTrajectories = trajParser.parseUserTrajectories(userTrajectoryFilePath);
+        HashMap<String, Trajectory> userTrajectories = trajParser.parseNYFTrajectories(userTrajectoryFilePath);
+        System.out.println("Trajectory Parsed");
+        
+        // create an object of TrajStorage to imitate database functionalities
+        TrajStorage trajStorage = new TrajStorage(userTrajectories);
+        // trajStorage.prepareQueryDataset();
+        // trajStorage.generateRandomTrajIds(numberOfRuns);
+        
+        
+        // build index on the trajectory data (assuming we have all of it in memory)
+        long fromTime = System.nanoTime();
+        TQIndex quadTrajTree = new TQIndex(trajStorage, trajParser.getLatCoeff(), trajParser.getLatConst(), trajParser.getLonCoeff(), trajParser.getLonConst(), 
+                            trajParser.getMaxLat(), trajParser.getMaxLon(), trajParser.getMinLat(), trajParser.getMinLon(), trajParser.getMinTimeInSec(), timeWindowInSec);
+        long toTime = System.nanoTime();
+        System.out.println("Index built for " + userTrajectories.size() + " Trajs, time: " + (toTime-fromTime)/1.0e9);
+            
+        // show some statistics of the recently built index
+        // Statistics stats = new Statistics(quadTrajTree);
+        // stats.printStats();
+
+        // show the indexed trajectories visually along with the appropriate q-nodes
+        // quadTrajTree.draw();
+        
+        String queryTrajFilePath = "../Data/NYF_Random_Query_Traj_Ids.txt";
+        File userTrajectoryFile = new File(queryTrajFilePath);
+        Assert.isTrue(userTrajectoryFile.exists(), "query trajectory file not found");
+            
+        for (int recDepth = 1; recDepth <= 3; recDepth++){
+            for (long tProx : temporalProximityValues){
+                for (double sProx : spatialProximityValues){
+        
+                    if (sProx != spatialProximity && tProx != temporalProximity) continue;
+                    if (sProx != spatialProximity && recDepth != maxRecursionDepth) continue;
+                    if (tProx != temporalProximity && recDepth != maxRecursionDepth) continue;
+                    
+                    // if (recDepth > 1) numberOfRuns = 10;
+                    // else numberOfRuns = 100;
+                    
+                    BufferedReader br = null;
+                    String line = new String();
+
+                    br = new BufferedReader(new FileReader(queryTrajFilePath));
+                         
+                    // calculating spatial proximity
+                    DistanceConverter distanceConverter = new DistanceConverter(trajParser.getMaxLon(), trajParser.getMaxLat(),
+                                                                                trajParser.getMinLon(), trajParser.getMinLat());
+                    double latProximity = distanceConverter.getLatProximity(sProx, proximityUnit);
+                    double lonProximity = distanceConverter.getLonProximity(sProx, proximityUnit);
+                    //System.out.println(latProximity + " and " + lonProximity);
+                    double t, io, infectedCount;
+                    t = io = infectedCount = 0;
+                    for (int i=0; i<numberOfRuns; i++){
+                        ArrayList <Trajectory> facilityGraph = new ArrayList<Trajectory>();
+                        // The following trajectory will be received as input
+                        //facilityGraph.add(trajStorage.getTrajectoryById("AAH03JAAQAAAO9VAA/"));
+                        //facilityGraph.add(trajStorage.getTrajectoryById(trajStorage.getTrajDataAsList().get(0).getAnonymizedId()));
+                        //System.out.println(facilityGraph.get(0).getPointList().size());
+                        // Trajectory inputTraj = trajStorage.getQueryTrajectory(tLenId);
+                        Trajectory inputTraj = trajStorage.getTrajectoryById(br.readLine());
+                        // Trajectory inputTraj = trajStorage.getTrajectoryById("AAH03JAAQAAAO9WAFx");
+                        String inputTrajId = new String(inputTraj.getAnonymizedId());
+                        int points = inputTraj.getPointList().size();
+                        System.out.print(inputTrajId + " - " + points);
+                        facilityGraph.add(inputTraj);
+                        ArrayList<Double> measures = TestServiceQuery.runQ2R(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, tProx, recDepth);
+                        // ArrayList<Double> measures = TestServiceQuery.run(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, tProx, recDepth);
+                        t += measures.get(0);
+                        io += measures.get(1);
+                        //ioTraj += measures.get(2);
+                        infectedCount += measures.get(2);
+                    }
+                    t /= numberOfRuns;
+                    io /= numberOfRuns;
+                    infectedCount /= numberOfRuns;
+                    //ioTraj /= numberOfRuns;
+                    String pointBucketRange = "";
+                    
+                    System.out.println("\nParameters: " + userTrajectories.size() + " Trajs (NYF dataset), " + sProx + " Meters, " + tProx/60 + " Minutes, Upto Level " + recDepth);
+                    System.out.println("Time = " + t + " , IO = " + io + " Avg. Infected = " + infectedCount + "\n");
                 }
             }
         }

@@ -148,7 +148,7 @@ public class TQIndex {
                 // removing redundant temporary information
                 trajStorage.clearQNodeToPointListMap();
             }
-        }
+        }      
         
         /*
         // qr-tree

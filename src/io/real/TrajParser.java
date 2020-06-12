@@ -132,6 +132,100 @@ public class TrajParser {
         return allTrajectories; 
     }
     
+    public HashMap<String, Trajectory> parseNYFTrajectories(String path) throws FileNotFoundException, IOException, ParseException{
+        File userTrajectoryFile = new File(path);
+        Assert.isTrue(userTrajectoryFile.exists(), "user trajectory file not found");
+
+        BufferedReader br = null;
+        String line = new String();
+
+        br = new BufferedReader(new FileReader(path));
+        
+        // maintains a map of anonymized id to the whole trajectory data (may use an integer user id instead of anonymized id later
+        HashMap<String, Trajectory> allTrajectories = new HashMap<String, Trajectory>();
+        // used to assign auto incrementing user ids to trajectories
+        long userCount = 0;
+        
+        // ignore the first line with headers
+        br.readLine();
+        // parse each line and add its point (location, time) to the appropriate trajectory
+        while ((line = br.readLine()) != null) {
+            // different fields in each line are extracted and quotes are trimmed
+            String[] data = line.split(",");
+            // System.out.print(data.length);
+            
+            String timeZoneOffset = data[0];    // ignore
+            String longitude = data[1];
+            String latitude = data[2];
+            String anonymizedId = data[3];
+            String utcTimestamp = data[4];
+            
+            data = utcTimestamp.split(" ");
+            String date = data[5] + data[1] +  data[2];
+            String time = data[3];
+            
+            // when an anonymized id is encountered the first time, a new entry in the map is generated
+            if (!allTrajectories.containsKey(anonymizedId)){
+                allTrajectories.put(anonymizedId, new Trajectory(anonymizedId, userCount));
+                userCount++;
+            }
+            
+            Coordinate trajPointCoord = new Coordinate(Double.parseDouble(latitude), Double.parseDouble(longitude));
+            // calculate timestamp (timeInSec) with simple date format, its parse and getTime methods and converting obtained ms value to seconds
+            SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyyMMMdd HH:mm:ss");
+            long timeInSec = dateTimeFormat.parse(date + " " + time).getTime()/1000;
+            
+            /*
+            // remove spatial noise (outside our desired geographical zone)
+            if (trajPointCoord.x < latLowerLimit || trajPointCoord.x > latUpperLimit) continue;
+            if (trajPointCoord.y < lonLowerLimit || trajPointCoord.y > lonUpperLimit) continue;
+            */
+            
+            // update the boundary values for normalization
+            if (trajPointCoord.x < minLat){
+                minLat = trajPointCoord.x;
+            }
+            else if (trajPointCoord.x > maxLat){
+                maxLat = trajPointCoord.x;
+            }
+            if (trajPointCoord.y < minLon){
+                minLon = trajPointCoord.y;
+            }
+            else if (trajPointCoord.y > maxLon){
+                maxLon = trajPointCoord.y;
+            }
+            
+            if (timeInSec < minTimeInSec){
+                minTimeInSec = timeInSec;
+            }
+            else if (timeInSec > maxTimeInSec){
+                maxTimeInSec = timeInSec;
+            }
+            
+            // a point containing location and time is constructed from the recently processed values and inserted into the trajectory
+            TrajPoint trajPoint = new TrajPoint(trajPointCoord, timeInSec);
+            allTrajectories.get(anonymizedId).addTrajPoint(trajPoint);
+        }
+        br.close();
+        
+        // location values are normalized in [0, 100] range
+        TrajNormalizer trajNormalizer = new TrajNormalizer();
+        allTrajectories = trajNormalizer.normalize(allTrajectories, minLon, minLat, maxLon, maxLat);
+        
+        for (HashMap.Entry<String,Trajectory> entry : allTrajectories.entrySet()){
+            Trajectory trajectory = entry.getValue();
+            trajectory.setSpatialEnv();
+        }
+        
+        // the denormalizing variables are updated
+        latCoeff = (maxLat/100.0-minLat/100.0);
+        latConst = minLat;
+        lonCoeff = (maxLon/100.0-minLon/100.0);
+        lonConst = minLon;
+        
+        return allTrajectories; 
+    }
+    
     public double getLatCoeff() {
         return latCoeff;
     }

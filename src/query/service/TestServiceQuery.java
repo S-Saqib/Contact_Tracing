@@ -101,6 +101,7 @@ public class TestServiceQuery {
             for (int level=1; level<=maxLevel; level++){
                 infectedContacts = processQuery.evaluateService(quadTrajTree.getQuadTree().getRootNode(), facilityGraph, infectedContacts, alreadyInfectedIds);
                 facilityGraph.clear();
+                if (infectedContacts == null) continue;
                 for (HashMap.Entry<String, TreeSet<TrajPoint>> entry : infectedContacts.entrySet()){
                     Trajectory newlyInfected = trajStorage.getTrajectoryById(entry.getKey());
                     Trajectory infectedPortion = new Trajectory();
@@ -117,12 +118,12 @@ public class TestServiceQuery {
             }
             long toTime = System.nanoTime();
             
-            System.out.println(" : " + infectedContacts.size());
+            System.out.println(" : " + (infectedContacts == null?0:infectedContacts.size()));
             ArrayList <Double> timeIO = new ArrayList<Double>();
             timeIO.add((toTime-fromTime)/1.0e9);
             timeIO.add(processQuery.getQ2RBlocksAccessed()*1.0);
             //timeIO.add(processQuery.getTrajectoriesAccessed()*1.0);
-            timeIO.add(infectedContacts.size()*1.0);
+            timeIO.add((infectedContacts == null?0:infectedContacts.size())*1.0);
             //processQuery.clearBlocksAccessed();
             return timeIO;
     }

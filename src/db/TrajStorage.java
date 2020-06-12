@@ -14,6 +14,7 @@ import static java.lang.Integer.max;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import org.javatuples.Pair;
 
@@ -307,11 +308,11 @@ public class TrajStorage {
         }
         
         System.out.println("No. of Trajs = " + trajData.size());
-        /*
+        
         for (int i=0; i<pointWiseTrajIdList.length; i++){
             System.out.println(i*pointCountInBucket + "-" + ((i+1)*pointCountInBucket-1) + " : " + pointWiseTrajIdList[i].size());
         }
-        */
+        
     }
     
     public Trajectory getQueryTrajectory(int pointBucketId){
@@ -320,5 +321,29 @@ public class TrajStorage {
         int randomTrajId = (int)(Math.random()*bucketSize);
         if (randomTrajId == bucketSize) randomTrajId--;
         return trajData.get(pointWiseTrajIdList[pointBucketId].get(randomTrajId));
+    }
+    
+    public void generateRandomTrajIds(int numberOfRuns){
+        HashSet<String> randomTrajIdList = new HashSet<String>();
+        while(numberOfRuns > 0){
+            int pointBucketId = (int)(Math.random()*pointWiseTrajIdList.length);
+            if (pointBucketId == pointWiseTrajIdList.length) pointBucketId--;
+            // if (pointBucketId < 0 || pointBucketId >= pointWiseTrajIdList.length) continue;
+            // since 0-th bucket has no entry
+            if (pointBucketId < 1 || pointBucketId >= pointWiseTrajIdList.length) continue;
+            int bucketSize = pointWiseTrajIdList[pointBucketId].size();
+            int randomTrajId = (int)(Math.random()*bucketSize);
+            if (randomTrajId == bucketSize) randomTrajId--;
+            
+            String trajId = (trajData.get(pointWiseTrajIdList[pointBucketId].get(randomTrajId))).getAnonymizedId();
+            if (!randomTrajIdList.contains(trajId)){
+                numberOfRuns--;
+                randomTrajIdList.add(trajId);
+            }
+        }
+        System.out.println("Randomly generated traj ids:");
+        for (String trajId : randomTrajIdList){
+            System.out.println(trajId);
+        }
     }
 }

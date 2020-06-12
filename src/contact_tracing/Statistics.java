@@ -26,7 +26,7 @@ public class Statistics {
     
     public void printStats(){
         
-        int trajCount = quadTrajTree.getTotalNodeTraj(quadTrajTree.getQuadTree().getRootNode());
+        // int trajCount = quadTrajTree.getTotalNodeTraj(quadTrajTree.getQuadTree().getRootNode());
         int nodeCount = quadTrajTree.getQuadTree().getNodeCount();
         int nodesHavingTrajectories = quadTrajTree.qNodeToAnonymizedTrajIdsMap.size();
             
@@ -42,7 +42,7 @@ public class Statistics {
             depthWiseTrajCount[node.getDepth()] += trajectories.size();
         }
         
-        System.out.println("Number of trajectories = " + trajCount);
+        // System.out.println("Number of trajectories = " + trajCount);
         System.out.println("Number of total qNodes = " + nodeCount);
         System.out.println("Number of qNodes having trajs = " + nodesHavingTrajectories);
         
