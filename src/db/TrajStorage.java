@@ -10,14 +10,19 @@ import ds.qtree.Point;
 import ds.trajectory.Trajectory;
 import ds.transformed_trajectory.TransformedTrajPoint;
 import ds.transformed_trajectory.TransformedTrajectory;
-import static java.lang.Integer.max;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Properties;
 import org.javatuples.Pair;
-
 /**
  *
  * @author Saqib
@@ -48,7 +53,7 @@ public class TrajStorage {
         this.qId_diskBlockIdToTrajIdListMap = new HashMap<>();
     }
 
-    public TrajStorage() {
+    public TrajStorage() throws SQLException {
         this.trajData = null;
         chunkSize = 100;
         cursor = 0;
@@ -58,6 +63,52 @@ public class TrajStorage {
         this.quadtreeWiseTransformedTrajData = null;
         this.diskBlockIdToTrajIdListMap = null;
         this.qId_diskBlockIdToTrajIdListMap = null;
+        
+        // try to connect to database
+        String url = "jdbc:postgresql://ec2-3-132-194-145.us-east-2.compute.amazonaws.com:5432/contact_tracing";
+        Properties props = new Properties();
+        props.setProperty("user","contact_tracing");
+        props.setProperty("password","datalabctq");
+        // props.setProperty("ssl","true");
+        props.setProperty("sslmode","require");
+        Connection conn = DriverManager.getConnection(url, props);
+        
+        /*
+        String url = "jdbc:postgresql://ec2-3-132-194-145.us-east-2.compute.amazonaws.com:5432/contact_tracing?user=contact_tracing&password=datalabctq&ssl=true";
+        Connection conn = DriverManager.getConnection(url);
+        */
+        System.out.println("Connection is successful");
+        Statement stmt = conn.createStatement();
+        
+        String SQL = "SELECT * FROM raw_data LIMIT 10";
+        ResultSet rs = stmt.executeQuery(SQL);
+        while (rs.next()){
+            int pointId = rs.getInt(1);
+            String anonymizedId = rs.getString(2);
+            double lat = rs.getDouble(3);
+            double lon = rs.getDouble(4);
+            Timestamp timeStamp = rs.getTimestamp(5);
+            
+            System.out.println(pointId + " : " + anonymizedId + " (" + lat + "," + lon + "), " + timeStamp + " = " + timeStamp.getTime()/1000);
+        }
+        
+        System.out.println("Using prepared statement");
+        SQL = "SELECT * FROM raw_data where anonymous_id = ? LIMIT ?";
+        PreparedStatement pstmt = conn.prepareStatement(SQL);
+        pstmt.setString(1, "AAH03JAAQAAAO9VAA/");
+        pstmt.setInt(2, 7);
+        rs = pstmt.executeQuery();
+        while (rs.next()){
+            int pointId = rs.getInt(1);
+            String anonymizedId = rs.getString(2);
+            double lat = rs.getDouble(3);
+            double lon = rs.getDouble(4);
+            Timestamp timeStamp = rs.getTimestamp(5);
+            
+            System.out.println(pointId + " : " + anonymizedId + " (" + lat + "," + lon + "), " + timeStamp + " = " + timeStamp.getTime()/1000);
+        }
+        
+        conn.close();
     }
 
     public HashMap<String, Trajectory> getTrajData() {
