@@ -289,6 +289,7 @@ public class TrajStorage {
     
     // the following functions should not be in this file, kept here for shortage of time
     public void prepareQueryDataset(){
+        System.out.println("No. of Trajs = " + trajData.size());
         int pointCountInBucket = 50;
         pointWiseTrajIdList = new ArrayList [4];
         for (int i=0; i<pointWiseTrajIdList.length; i++) pointWiseTrajIdList[i] = new ArrayList<String>();
@@ -306,13 +307,11 @@ public class TrajStorage {
             pointWiseTrajIdList[trajBucket].add(entry.getKey());
             */
         }
-        
-        System.out.println("No. of Trajs = " + trajData.size());
-        
+        /*
         for (int i=0; i<pointWiseTrajIdList.length; i++){
             System.out.println(i*pointCountInBucket + "-" + ((i+1)*pointCountInBucket-1) + " : " + pointWiseTrajIdList[i].size());
         }
-        
+        */
     }
     
     public Trajectory getQueryTrajectory(int pointBucketId){

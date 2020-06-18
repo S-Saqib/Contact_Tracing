@@ -244,7 +244,7 @@ public class Contact_Tracing {
         double spatialProximity = 2; // should be around 13 feet for example
         // 1, 2 (default), 4, 10
         String proximityUnit = "m"; // it can be "m", "km", "mile" and "ft"
-        long[] temporalProximityValues = {1*60, 15*60, 30*60, 60*60, 180*60};
+        long[] temporalProximityValues = {1*60, 1*60, 15*60, 30*60, 60*60, 180*60};
         long temporalProximity = 30; // in minutes, may be anything around 5 to 240 for example
         // 15, 30 (default), 60, 180
         temporalProximity *= 60;    // in seconds
@@ -285,7 +285,7 @@ public class Contact_Tracing {
         File userTrajectoryFile = new File(queryTrajFilePath);
         Assert.isTrue(userTrajectoryFile.exists(), "query trajectory file not found");
             
-        for (int recDepth = 1; recDepth <= 3; recDepth++){
+        for (int recDepth = 1; recDepth <= 1/*3*/; recDepth++){
             for (long tProx : temporalProximityValues){
                 for (double sProx : spatialProximityValues){
         
@@ -322,8 +322,8 @@ public class Contact_Tracing {
                         int points = inputTraj.getPointList().size();
                         System.out.print(inputTrajId + " - " + points);
                         facilityGraph.add(inputTraj);
-                        ArrayList<Double> measures = TestServiceQuery.runQ2R(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, tProx, recDepth);
-                        // ArrayList<Double> measures = TestServiceQuery.run(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, tProx, recDepth);
+                        // ArrayList<Double> measures = TestServiceQuery.runQ2R(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, tProx, recDepth);
+                        ArrayList<Double> measures = TestServiceQuery.run(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, tProx, recDepth);
                         t += measures.get(0);
                         io += measures.get(1);
                         //ioTraj += measures.get(2);

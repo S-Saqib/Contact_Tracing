@@ -38,10 +38,19 @@ public class TrajParser {
         lonCoeff = 0;
         lonConst = 0;
         // the following limits are used to remove spatially noisy data (if any)
+        /*
+        // BD (Cellphone data)
         latLowerLimit = 20; // 20
         latUpperLimit = 27; // 27
         lonLowerLimit = 88; // 88
         lonUpperLimit = 93; // 93
+        */
+        
+        // NYF data
+        latLowerLimit = 40.47;
+        latUpperLimit = 45.02;
+        lonLowerLimit = -79.77;
+        lonUpperLimit = -71.75;
         // there may be some temporal noise which we do not know about, if there is, it should be cleaned as well
         minTimeInSec = (long) 1e18;
         maxTimeInSec = -1;
@@ -161,7 +170,7 @@ public class TrajParser {
             String utcTimestamp = data[4];
             
             data = utcTimestamp.split(" ");
-            String date = data[5] + data[1] +  data[2];
+            String date = data[5] + "-" + data[1] + "-" + data[2];
             String time = data[3];
             
             // when an anonymized id is encountered the first time, a new entry in the map is generated
@@ -172,14 +181,12 @@ public class TrajParser {
             
             Coordinate trajPointCoord = new Coordinate(Double.parseDouble(latitude), Double.parseDouble(longitude));
             // calculate timestamp (timeInSec) with simple date format, its parse and getTime methods and converting obtained ms value to seconds
-            SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyyMMMdd HH:mm:ss");
+            SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyy-MMM-dd HH:mm:ss");
             long timeInSec = dateTimeFormat.parse(date + " " + time).getTime()/1000;
             
-            /*
             // remove spatial noise (outside our desired geographical zone)
             if (trajPointCoord.x < latLowerLimit || trajPointCoord.x > latUpperLimit) continue;
             if (trajPointCoord.y < lonLowerLimit || trajPointCoord.y > lonUpperLimit) continue;
-            */
             
             // update the boundary values for normalization
             if (trajPointCoord.x < minLat){

@@ -88,7 +88,7 @@ public class TQIndex {
             }
             trajectories = this.trajStorage.getNextChunkAsList();
         }
-        
+        /*
         //q2r-tree
         {
             // removing redundant temporary information
@@ -149,8 +149,8 @@ public class TQIndex {
                 trajStorage.clearQNodeToPointListMap();
             }
         }      
+        */
         
-        /*
         // qr-tree
         {
             // assuming zCode starts from 0 (the second argument)
@@ -168,7 +168,7 @@ public class TQIndex {
             // removing redundant temporary information
             trajStorage.clearQNodeToPointListMap();
         }
-        */
+        
         
         /*
         // q-tree
