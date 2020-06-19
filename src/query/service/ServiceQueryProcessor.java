@@ -10,7 +10,6 @@ import db.TrajStorage;
 import ds.qtrajtree.TQIndex;
 import ds.qtree.Node;
 import ds.qtree.NodeType;
-import ds.qtree.Point;
 import ds.qtree.QuadTree;
 import ds.trajectory.TrajPoint;
 import ds.trajectory.TrajPointComparator;
@@ -19,7 +18,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.TreeSet;
-import org.javatuples.Pair;
 
 /**
  *
@@ -31,10 +29,8 @@ public class ServiceQueryProcessor {
     private double latDisThreshold;
     private double lonDisThreshold;
     private double temporalDisThreshold;
-    private TrajStorage trajStorage;
+    private final TrajStorage trajStorage;
     private HashSet<Integer> blocksAccessed;
-    private HashSet<Pair<Long, Integer>> q2r_blocksAccessed;;
-    private HashSet<String> trajectoriesAccessed;
 
     public ServiceQueryProcessor(TrajStorage trajStorage, TQIndex quadTrajTree, double latDisThreshold, double lonDisThreshold, long temporalDisThreshold) {
         this.quadTrajTree = quadTrajTree;
@@ -43,18 +39,8 @@ public class ServiceQueryProcessor {
         this.temporalDisThreshold = temporalDisThreshold;
         this.trajStorage = trajStorage;
         this.blocksAccessed = new HashSet<Integer>();
-        this.q2r_blocksAccessed = new HashSet<Pair<Long, Integer>>();
-        
-        // this.trajectoriesAccessed = new HashSet<String>();
     }
     
-    public ServiceQueryProcessor(TQIndex quadTrajTree) {
-        this.quadTrajTree = quadTrajTree;
-        this.latDisThreshold = 0;
-        this.lonDisThreshold = 0;
-        this.temporalDisThreshold = 0;
-    }
-
     public double getLatDisThreshold() {
         return latDisThreshold;
     }
@@ -112,7 +98,6 @@ public class ServiceQueryProcessor {
             qChildren[1] = qNode.getSe();
             qChildren[2] = qNode.getSw();
             qChildren[3] = qNode.getNw();
-            newContactInfo = null;
             for (int k = 0; k < 4; k++) {
                 ArrayList<Trajectory> querySubgraphs = clipGraph(qChildren[k], facilityQuery);
                 newContactInfo = evaluateService(qChildren[k], querySubgraphs, contactInfo, alreadyInfectedIds);
@@ -173,8 +158,7 @@ public class ServiceQueryProcessor {
         if (interNodeQuadTree == null || interNodeQuadTree.isEmpty()) {
             return null;
         }
-        // return calculateCover(interNodeQuadTree, facilityQuery, contactInfo);
-        return calculateCoverQ2R(interNodeQuadTree, facilityQuery, contactInfo, alreadyInfectedIds);
+        return calculateCover(interNodeQuadTree, facilityQuery, contactInfo, alreadyInfectedIds);
     }
     
     // actually calculates the overlaps with facility trajectory
@@ -257,93 +241,7 @@ public class ServiceQueryProcessor {
         return contactInfo;
     }
     
-    public HashMap <String, TreeSet<TrajPoint>> calculateCoverQ2R(QuadTree quadTree, ArrayList<Trajectory> facilityQuery,
-                                                    HashMap<String, TreeSet<TrajPoint>> contactInfo, HashSet<String> alreadyInfectedIds) {
-        for (Trajectory trajectory : facilityQuery) {
-            String infectedAnonymizedId = trajectory.getAnonymizedId();
-            for (TrajPoint trajPoint : trajectory.getPointList()) {
-                // trajPointCoordinate of a facility point
-                Coordinate trajPointCoordinate = trajPoint.getPointLocation();
-                double infectedX = trajPointCoordinate.x;
-                double infectedY = trajPointCoordinate.y;
-                double infectedT = trajPoint.getTimeInSec();
-                // taking each point of facility subgraph we are checking against the points of inter node trajectories, indexed in the quadtree
-                double xMin = infectedX - latDisThreshold;
-                double xMax = infectedX + latDisThreshold;
-                double yMin = infectedY - lonDisThreshold;
-                double yMax = infectedY + lonDisThreshold;
-                
-                Node[] relevantNodes = quadTree.searchIntersect(xMin, yMin, xMax, yMax);
-                
-                // calculating time index for the trajectory points
-                ArrayList<Integer> timeBuckets = new ArrayList<Integer>();
-                int timeIndexFrom = quadTree.getTimeIndex(trajPoint.getTimeInSec());
-                int timeIndexTo = quadTree.getTimeIndex(trajPoint.getTimeInSec() + (long) temporalDisThreshold);
-                for (int timeIndex = timeIndexFrom; timeIndex <= timeIndexTo; timeIndex++){
-                    timeBuckets.add(timeIndex);
-                }
-                
-                HashSet<Integer> relevantDiskBlocks = new HashSet<Integer>();
-                for (Node node : relevantNodes){
-                    for (int timeIndex : timeBuckets){
-                        ArrayList<Object> mappedDiskBlocks = node.getDiskBlocksByQNodeTimeIndex(timeIndex);
-                        if (mappedDiskBlocks == null) continue;
-                        for (Object blockId : mappedDiskBlocks){
-                            relevantDiskBlocks.add((Integer) blockId);
-                            q2r_blocksAccessed.add(new Pair(quadTree.getzCode(), (Integer)blockId));
-                        }
-                    }
-                }
-                
-                ArrayList<Trajectory> relevantTrajectories = new ArrayList<Trajectory>();
-                // need a map for disk block id to trajectory (the reverse of traj to disk block map
-                for (Integer blockId : relevantDiskBlocks){
-                    for (String trajId : trajStorage.getTrajIdListByQId_BlockId(quadTree.getzCode(), blockId)){
-                        relevantTrajectories.add(trajStorage.getTrajectoryById(trajId));
-                        // trajectoriesAccessed.add(trajId);
-                    }
-                }
-                
-                for (Trajectory traj : relevantTrajectories){
-                    String checkId = traj.getAnonymizedId();
-                    for (TrajPoint point : traj.getPointList()){
-                        // checking if the point belongs to the same trajectory, if so, it should be ignored
-                        // if (checkId.equals(infectedAnonymizedId)){
-                        // checking if the point belongs to a covid positive user given as input to the method, if so, it should be ignored
-                        if (infectedAnonymizedId.equals(checkId)){
-                            continue;
-                        }
-                        // spatial matching: checking if eucliean distance is within spatialDistanceThreshold
-                        double checkX = point.getPointLocation().x;
-                        double checkY = point.getPointLocation().y;
-                        // need to calculate geodesic distance here
-                        double euclideanDistance = Math.sqrt(Math.pow((infectedX - checkX), 2) + Math.pow((infectedY - checkY), 2));
-                        if (euclideanDistance <= (latDisThreshold+lonDisThreshold)/2){
-                            double checkT = point.getTimeInSec();
-                            // temporal matching: checkT should be in [t, t+temporalDistanceThreshold] window for a contact to be affected
-                            if (checkT - infectedT >= 0 && checkT - infectedT <= temporalDisThreshold){
-                                if (!contactInfo.containsKey(checkId)){
-                                    contactInfo.put((String)checkId, new TreeSet<TrajPoint>(new TrajPointComparator()));
-                                }
-                                contactInfo.get(checkId).add(point);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return contactInfo;
-    }
-
     public int getBlocksAccessed() {
         return blocksAccessed.size();
-    }
-    
-    public int getQ2RBlocksAccessed() {
-        return q2r_blocksAccessed.size();
-    }
-    
-    public int getTrajectoriesAccessed() {
-        return trajectoriesAccessed.size();
     }
 }

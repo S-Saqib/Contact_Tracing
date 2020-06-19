@@ -121,10 +121,7 @@ public class TestServiceQuery {
             System.out.println(" : " + (infectedContacts == null?0:infectedContacts.size()));
             ArrayList <Double> timeIO = new ArrayList<Double>();
             timeIO.add((toTime-fromTime)/1.0e9);
-            timeIO.add(processQuery.getQ2RBlocksAccessed()*1.0);
-            //timeIO.add(processQuery.getTrajectoriesAccessed()*1.0);
             timeIO.add((infectedContacts == null?0:infectedContacts.size())*1.0);
-            //processQuery.clearBlocksAccessed();
             return timeIO;
     }
 }

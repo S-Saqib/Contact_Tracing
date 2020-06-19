@@ -134,39 +134,6 @@ public class QuadTree {
         this.count_ = 0;
     }
 
-    /**
-     * Returns an array containing the coordinates of each point stored in the tree.
-     * @return {Array.<Point>} Array of coordinates.
-     */
-    public Point[] getKeys() {
-        final List<Point> arr = new ArrayList<Point>();
-        this.traverse(this.root_, new Func() {
-            public void call(QuadTree quadTree, Node node) {
-                for (Point point : trajStorage.getPointsFromQNode(node)){
-                    arr.add(point);
-                }
-            }
-        });
-        return arr.toArray(new Point[arr.size()]);
-    }
-
-    /**
-     * Returns an array containing all values stored within the tree.
-     * @return {Array.<Object>} The values stored within the tree.
-     */
-    public Object[] getValues() {
-        final List<Object> arr = new ArrayList<Object>();
-        this.traverse(this.root_, new Func() {
-            public void call(QuadTree quadTree, Node node) {
-                for (Point point : trajStorage.getPointsFromQNode(node)){
-                    arr.add(point.getValue());
-                }
-            }
-        });
-
-        return arr.toArray(new Object[arr.size()]);
-    }
-
     public Node[] searchIntersect(final double xmin, final double ymin, final double xmax, final double ymax) {
         final HashSet<Node> arr = new HashSet<Node>();
         this.navigate(this.root_, new Func() {
@@ -178,22 +145,6 @@ public class QuadTree {
         return arr.toArray(new Node[arr.size()]);
     }
     
-    // the following method is not used, so not updated like searchIntersect
-    public Point[] searchWithin(final double xmin, final double ymin, final double xmax, final double ymax) {
-        final List<Point> arr = new ArrayList<Point>();
-        this.navigate(this.root_, new Func() {
-            public void call(QuadTree quadTree, Node node) {
-                // the following loop may be optimized if we can check node boundary only instead of all the points
-                for (Point point: trajStorage.getPointsFromQNode(node)){
-                    if (point.getX() > xmin && point.getX() < xmax && point.getY() > ymin && point.getY() < ymax) {
-                        arr.add(point);
-                    }
-                }
-            }
-        }, xmin, ymin, xmax, ymax);
-        return arr.toArray(new Point[arr.size()]);
-    }
-
     public void navigate(Node node, Func func, double xmin, double ymin, double xmax, double ymax) {
         switch (node.getNodeType()) {
             case LEAF:
@@ -221,29 +172,7 @@ public class QuadTree {
         if (minY > node.getY() + node.getH()) return false;
         return true;
     }
-    /**
-     * Clones the quad-tree and returns the new instance.
-     * @return {QuadTree} A clone of the tree.
-     */
-    public QuadTree clone() {
-        double x1 = this.root_.getX();
-        double y1 = this.root_.getY();
-        double x2 = x1 + this.root_.getW();
-        double y2 = y1 + this.root_.getH();
-        final QuadTree clone = new QuadTree(new TrajStorage(trajStorage.getTrajData()), x1, y1, x2, y2, this.minTimeInSec, this.timeWindowInSec);
-        // This is inefficient as the clone needs to recalculate the structure of the
-        // tree, even though we know it already.  But this is easier and can be
-        // optimized when/if needed.
-        this.traverse(this.root_, new Func() {
-            public void call(QuadTree quadTree, Node node) {
-                for (Point point: trajStorage.getPointsFromQNode(node)){
-                    clone.set(point.getX(), point.getY(), point.getTimeInSec(), point.getValue(), point.getTraj_id());
-                }
-            }
-        });
-        return clone;
-    }
-
+    
     /**
      * Traverses the tree depth-first, with quadrants being traversed in clockwise
      * order (NE, SE, SW, NW).  The provided function will be called for each
@@ -266,8 +195,8 @@ public class QuadTree {
                 this.traverse(node.getSw(), func);
                 this.traverse(node.getNw(), func);
                 break;
-		default:
-			break;
+            default:
+                break;
         }
     }
 
@@ -439,20 +368,6 @@ public class QuadTree {
         node.incPointCount();
     }
     
-    private void addPointToQId_Node(Node node, Point point) {
-        if (node.getNodeType() == NodeType.POINTER) {
-            System.out.println("Can not set point for node of type POINTER for node " + node);
-            throw new QuadTreeException("Can not set point for node of type POINTER");
-        }
-        if (node.getNodeType() != NodeType.LEAF) node.setNodeType(NodeType.LEAF);
-        // ArrayList <Point> points= node.getPoints();
-        // if (points == null) points = new ArrayList<Point>();
-        // points.add(point);
-        // node.setPoints(points);
-        trajStorage.addPointToQId_QNode(zCode, node, point);
-        node.incPointCount();
-    }
-    
     public int getTimeIndex(long timeStamp){
         if (timeStamp < minTimeInSec) return -1;
         return (int)((timeStamp - minTimeInSec)/timeWindowInSec);
@@ -519,9 +434,8 @@ public class QuadTree {
                     long qNodeIndex = node.getZCode();
                     TransformedTrajPoint transformedTrajPoint = new TransformedTrajPoint(qNodeIndex, timeIndex);
                     String trajId = (String)point.getTraj_id();
-                    // trajStorage.addValueToTransformedTrajData(trajId, transformedTrajPoint);
+                    trajStorage.addValueToTransformedTrajData(trajId, transformedTrajPoint);
                     // zCode of root is a unique identifier of quadtree, so passing it for traj identification
-                    trajStorage.addTransformedTrajValue(zCode, trajId, transformedTrajPoint);
                 }
             }
             return;
@@ -558,21 +472,12 @@ public class QuadTree {
         }
         if (node.getNodeType() == NodeType.LEAF){
             ArrayList <Point> pointList = trajStorage.getPointsFromQNode(node);
-            // double avgTrajPerBlk = 3;
-            // using rtree, it is around 2.9 for different datasets, so used 3
             for (Point point : pointList){
                 int timeIndex = getTimeIndex(point.getTimeInSec());
                 if (timeIndex >= 0){
                     String trajId = (String)point.getTraj_id();
                     Object diskBlockId = null;
-                    try{
-                        diskBlockId = trajStorage.getQId_DiskBlockIdByTrajId(trajId).getValue1();
-                    } catch (NullPointerException E){
-                        diskBlockId = trajStorage.getDiskBlockIdByTrajId(trajId);
-                    }
-                    
-                    // this is the logic of getting block id, calculated directly without help of trajStorage
-                    // Object diskBlockId = (int)(trajStorage.getTrajectoryById(trajId).getUserId() / avgTrajPerBlk);
+                    diskBlockId = trajStorage.getDiskBlockIdByTrajId(trajId);
                     node.addDiskBlockId(timeIndex, diskBlockId);
                 }
             }
@@ -583,31 +488,4 @@ public class QuadTree {
         tagDiskBlockIdsToNodes(node.getSw());
         tagDiskBlockIdsToNodes(node.getSe());
     }
-    
-    public void tagTrivialDiskBlockIdsToNodes(Node node){
-        if (node.getNodeType() == NodeType.EMPTY){
-            // just added for safety, should not reach here
-            return;
-        }
-        if (node.getNodeType() == NodeType.LEAF){
-            ArrayList <Point> pointList = trajStorage.getPointsFromQNode(node);
-            double avgTrajPerBlk = 3;
-            // using rtree, it is around 2.9 for different datasets, so used 3
-            for (Point point : pointList){
-                int timeIndex = getTimeIndex(point.getTimeInSec());
-                if (timeIndex >= 0){
-                    String trajId = (String)point.getTraj_id();
-                    // this is the logic of getting block id, calculated directly without help of trajStorage
-                    Object diskBlockId = (int)(trajStorage.getTrajectoryById(trajId).getUserId() / avgTrajPerBlk);
-                    node.addDiskBlockId(timeIndex, diskBlockId);
-                }
-            }
-            return;
-        }
-        tagTrivialDiskBlockIdsToNodes(node.getNw());
-        tagTrivialDiskBlockIdsToNodes(node.getNe());
-        tagTrivialDiskBlockIdsToNodes(node.getSw());
-        tagTrivialDiskBlockIdsToNodes(node.getSe());
-    }
-    
 }
