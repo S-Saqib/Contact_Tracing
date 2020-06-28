@@ -14,7 +14,9 @@ import ds.qtree.QuadTree;
 import ds.trajectory.TrajPoint;
 import ds.trajectory.TrajPointComparator;
 import ds.trajectory.Trajectory;
+import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.TreeSet;
@@ -65,75 +67,6 @@ public class ServiceQueryProcessor {
         this.temporalDisThreshold = temporalDisThreshold;
     }
     
-    // the following method deals with inter node trajectories organized hierarchically
-    // it traverses from root to leaves of the first level quadtree and processes internode trajectories for each node by calling evaluateNodeTraj method
-    // should not be needed for QR-tree
-    public HashMap <String, TreeSet<TrajPoint>> evaluateService(Node qNode, ArrayList<Trajectory> facilityQuery,
-                                                    HashMap <String, TreeSet<TrajPoint>> contactInfo, HashSet<String> alreadyInfectedIds) {
-        
-        if (facilityQuery == null || facilityQuery.isEmpty() || qNode.getNodeType() == NodeType.EMPTY) {
-            return null;
-        }
-        
-        HashMap <String, TreeSet<TrajPoint>> newContactInfo = evaluateNodeTraj(qNode, facilityQuery, contactInfo, alreadyInfectedIds);
-        
-        if (newContactInfo != null) {
-            for (HashMap.Entry<String, TreeSet<TrajPoint>> entry : newContactInfo.entrySet()) {
-                String trajId = entry.getKey();
-                TreeSet<TrajPoint> newContactPoints = entry.getValue();
-                if (!contactInfo.containsKey(trajId)){
-                    contactInfo.put(trajId, newContactPoints);
-                }
-                else{
-                    for (TrajPoint trajPoint: newContactPoints) {
-                        contactInfo.get(trajId).add(trajPoint);
-                    }
-                }
-            }
-        }
-        
-        if (qNode.getNodeType() != NodeType.LEAF){
-            Node[] qChildren = new Node[4];
-            qChildren[0] = qNode.getNe();
-            qChildren[1] = qNode.getSe();
-            qChildren[2] = qNode.getSw();
-            qChildren[3] = qNode.getNw();
-            for (int k = 0; k < 4; k++) {
-                ArrayList<Trajectory> querySubgraphs = clipGraph(qChildren[k], facilityQuery);
-                newContactInfo = evaluateService(qChildren[k], querySubgraphs, contactInfo, alreadyInfectedIds);
-                if (newContactInfo != null) {
-                    for (HashMap.Entry<String, TreeSet<TrajPoint>> entry : newContactInfo.entrySet()) {
-                        String trajId = entry.getKey();
-                        TreeSet<TrajPoint> newContactPoints = entry.getValue();
-                        if (!contactInfo.containsKey(trajId)){
-                            contactInfo.put(trajId, newContactPoints);
-                        }
-                        else{
-                            for (TrajPoint trajPoint: newContactPoints) {
-                                contactInfo.get(trajId).add(trajPoint);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return contactInfo;
-    }
-    
-    private ArrayList<Trajectory> clipGraph(Node node, ArrayList<Trajectory> facilityQuery) {
-        ArrayList<Trajectory> clippedSubgraphs = new ArrayList<Trajectory>();
-        for (Trajectory trajectory : facilityQuery){
-            Trajectory clippedFacility = new Trajectory(trajectory.getAnonymizedId(), trajectory.getUserId());
-            for (TrajPoint trajPoint : trajectory.getPointList()){
-                if (containsExtended(node, trajPoint)){
-                    clippedFacility.addTrajPoint(trajPoint);
-                }
-            }
-            clippedSubgraphs.add(clippedFacility);
-        }
-        return clippedSubgraphs;
-    }
-    
     boolean containsExtended(Node qNode, TrajPoint trajPoint) {
         Coordinate coord = trajPoint.getPointLocation();
         // checking whether an extended qNode contains a point
@@ -147,24 +80,10 @@ public class ServiceQueryProcessor {
         return true;
     }
     
-    // the following method obtains the corresponding quadtree for the inter node trajectories of a node and passes to calculate cover for processing them
-    // should not be needed for QR tree as we have a single quadtree
-    private HashMap <String, TreeSet<TrajPoint>> evaluateNodeTraj(Node qNode, ArrayList<Trajectory> facilityQuery,
-                                                    HashMap<String, TreeSet<TrajPoint>> contactInfo, HashSet<String> alreadyInfectedIds) {
-        if (facilityQuery == null || facilityQuery.isEmpty() || qNode.getNodeType() == NodeType.EMPTY) {
-            return null;
-        }
-        QuadTree interNodeQuadTree = quadTrajTree.getQNodeQuadTree(qNode);
-        if (interNodeQuadTree == null || interNodeQuadTree.isEmpty()) {
-            return null;
-        }
-        return calculateCover(interNodeQuadTree, facilityQuery, contactInfo, alreadyInfectedIds);
-    }
-    
     // actually calculates the overlaps with facility trajectory
     // should be called directly for QR-tree
     public HashMap <String, TreeSet<TrajPoint>> calculateCover(QuadTree quadTree, ArrayList<Trajectory> facilityQuery,
-                                                    HashMap<String, TreeSet<TrajPoint>> contactInfo, HashSet<String> alreadyInfectedIds) {
+                                                    HashMap<String, TreeSet<TrajPoint>> contactInfo, HashSet<String> alreadyInfectedIds) throws SQLException {
         for (Trajectory trajectory : facilityQuery) {
             String infectedAnonymizedId = trajectory.getAnonymizedId();
             for (TrajPoint trajPoint : trajectory.getPointList()) {
@@ -201,14 +120,18 @@ public class ServiceQueryProcessor {
                     }
                 }
                 
-                ArrayList<Trajectory> relevantTrajectories = new ArrayList<Trajectory>();
+                ArrayList <String> trajIdList = new ArrayList<String>();
+                // ArrayList<Trajectory> relevantTrajectories = new ArrayList<Trajectory>();
                 // need a map for disk block id to trajectory (the reverse of traj to disk block map
                 for (Integer blockId : relevantDiskBlocks){
                     for (String trajId : trajStorage.getTrajIdListByBlockId(blockId)){
-                        relevantTrajectories.add(trajStorage.getTrajectoryById(trajId));
+                        // relevantTrajectories.add(trajStorage.getTrajectoryById(trajId));
                         // trajectoriesAccessed.add(trajId);
+                        trajIdList.add(trajId);
                     }
                 }
+                String[] trajIdArray = new String[trajIdList.size()];
+                ArrayList<Trajectory> relevantTrajectories = trajStorage.getTrajectoriesByMultipleIds(trajIdList.toArray(trajIdArray));
                 
                 for (Trajectory traj : relevantTrajectories){
                     String checkId = traj.getAnonymizedId();

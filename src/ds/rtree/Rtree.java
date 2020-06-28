@@ -30,7 +30,7 @@ public class Rtree {
         transformedTrajectories.entrySet().forEach((entry) -> {
             TransformedTrajectory traj = entry.getValue();
             //traj.setEnvelope();
-            traj.setEnvelope(true); // true means min, max bounds are already updated
+            traj.setEnvelope(true); // true means min, max bounds are already 
             this.tree = this.tree.add(entry.getKey(), traj.getEnvelope());
         });
     }

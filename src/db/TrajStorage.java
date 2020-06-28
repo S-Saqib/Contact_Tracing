@@ -7,6 +7,7 @@ package db;
 
 import ds.qtree.Node;
 import ds.qtree.Point;
+import ds.trajectory.TrajPoint;
 import ds.trajectory.Trajectory;
 import ds.transformed_trajectory.TransformedTrajPoint;
 import ds.transformed_trajectory.TransformedTrajectory;
@@ -36,8 +37,10 @@ public class TrajStorage {
     private final long minTimeInSec;
     
     private final DbInterface dbInterface;
+    private final String trajTableName;
+    private final int fetchSize;
     
-    public TrajStorage() throws SQLException {
+    public TrajStorage(String trajTableName, int fetchSize) throws SQLException {
         this.trajData = new HashMap<String, Trajectory>();
         this.transformedTrajData = new HashMap<String, TransformedTrajectory>();
         this.diskBlockIdToTrajIdListMap = new HashMap<Integer, ArrayList<String>>();
@@ -45,6 +48,9 @@ public class TrajStorage {
         // initialize stats related variables properly from database
         long fromTime = System.currentTimeMillis();
         this.dbInterface = new DbInterface();
+        
+        this.trajTableName = trajTableName;
+        this.fetchSize = fetchSize;
         
         String statsQuery = "SELECT max((point).lat), max((point).lng), min((point).lat), min((point).lng), min((point).ts) FROM raw_data";
         PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(statsQuery);
@@ -95,6 +101,93 @@ public class TrajStorage {
         Trajectory trajectory = trajData.get(Id);
         return trajectory;
     }
+    
+    public ArrayList<Trajectory> getTrajectoriesByMultipleIds(String[] trajIdList) throws SQLException{
+        ArrayList<Trajectory> trajList = new ArrayList<Trajectory>();
+        
+        String normalizedTrajQuery = "select normalized_points from " + trajTableName + " where anonymous_id in + (?";
+        for (int i=1; i<trajIdList.length; i++){
+            normalizedTrajQuery += ",?";
+        }
+        normalizedTrajQuery += ")";
+        
+        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(normalizedTrajQuery);
+        
+        for (int i=0; i<trajIdList.length; i++){
+            String trajId = trajIdList[i];
+            pstmt.setString(i+1, trajId);
+        }
+        
+        pstmt.setFetchSize(fetchSize);
+        
+        int trajsProcessed = 0;
+        
+        ResultSet rs = pstmt.executeQuery();
+        while (rs.next()){
+            String anonymizedId = trajIdList[trajsProcessed++];
+            Array trajPointArray = rs.getArray(1);
+            Object[] trajPointList = (Object[])trajPointArray.getArray();
+            int pointCount = 0;
+            Trajectory traj = new Trajectory(anonymizedId, -1);
+            for(Object trjPtObj: trajPointList){
+                TrajPoint trajPoint = new TrajPoint(trjPtObj);
+                double normalizedLat = trajPoint.getPointLocation().x;
+                double normalizedLon = trajPoint.getPointLocation().y;
+                long trajPointTimeInSec = trajPoint.getTimeInSec();
+                if (normalizedLat < 0 || normalizedLat > 100 || normalizedLon < 0 || normalizedLon > 100){
+                    if (normalizedLat < 0){
+                        if (normalizedLat > -1.0e-6){
+                            normalizedLat = 0;
+                            trajPoint.getPointLocation().setOrdinate(0, normalizedLat);
+                        }
+                        else{
+                            System.out.println("Point (" + normalizedLat + "," + normalizedLon + ") - " + trajPointTimeInSec + " is out of bounds for lat");
+                            continue;
+                        }
+                    }
+                    else if (normalizedLat > 100){
+                        if (normalizedLat-100 < 1.0e-6){
+                            normalizedLat = 100;
+                            trajPoint.getPointLocation().setOrdinate(0, normalizedLat);
+                        }
+                        else{
+                            System.out.println("Point (" + normalizedLat + "," + normalizedLon + ") - " + trajPointTimeInSec + " is out of bounds for lat");
+                            continue;
+                        }
+                    }
+                    else{
+                        // ok, no issues with lat
+                    }
+                    if (normalizedLon < 0){
+                        if (normalizedLon > -1.0e-6){
+                            normalizedLon = 0;
+                            trajPoint.getPointLocation().setOrdinate(1, normalizedLon);
+                        }
+                        else{
+                            System.out.println("Point (" + normalizedLat + "," + normalizedLon + ") - " + trajPointTimeInSec + " is out of bounds for lon");
+                            continue;
+                        }
+                    }
+                    else if (normalizedLon > 100){
+                        if (normalizedLon-100 < 1.0e-6){
+                            normalizedLon = 100;
+                            trajPoint.getPointLocation().setOrdinate(1, normalizedLon);
+                        }
+                        else{
+                            System.out.println("Point (" + normalizedLat + "," + normalizedLon + ") - " + trajPointTimeInSec + " is out of bounds for lon");
+                            continue;
+                        }
+                    }
+                    else{
+                        // ok, no issues with lon
+                    }
+                }
+                traj.addTrajPoint(trajPoint);
+            }
+            trajList.add(traj);
+        }
+        return trajList;
+    }
         
     public ArrayList<Point> getPointsFromQNode(Node qNode) throws SQLException{
         // SQL: select points from qnode_to_point_map where node = row(0, 0, 50, 50)::qnode;
@@ -122,7 +215,7 @@ public class TrajStorage {
         }
 
         if (qNodePointList.size() == 0){
-            System.out.println("Something went wrong while retrieving point lisf of qnode " + qNode);
+            System.out.println("Something went wrong while retrieving point list of qnode " + qNode);
         }
         return qNodePointList;
     }
@@ -246,7 +339,6 @@ public class TrajStorage {
             
             // update normalized trajectory table column in database
             //SQL: update normalized_trajectory_day_one set rtree_block_id = 0 where anonymous_id = 'AAH03JAAQAAAO9VAA4'
-            final String trajTableName = "normalized_trajectory_day_one";
             String updateDiskBlockQuery = "update " + trajTableName + " set rtree_block_id = ? where anonymous_id = ?";
             PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(updateDiskBlockQuery);
 
@@ -263,10 +355,9 @@ public class TrajStorage {
     }
     
     public void clusterTrajData() throws SQLException{
-        final String trajTableName = "normalized_trajectory_day_one";
         final String indexName = "rtree_block_id_" + trajTableName + "_idx";
                 
-        String indexQuery = "create index " + indexName + " on " + trajTableName + " (rtree_block_id)";
+        String indexQuery = "create index if not exists " + indexName + " on " + trajTableName + " (rtree_block_id)";
         PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(indexQuery);
         pstmt.execute();
         
@@ -283,6 +374,11 @@ public class TrajStorage {
     public ArrayList<String> getTrajIdListByBlockId(Integer blockId){
         if (!diskBlockIdToTrajIdListMap.containsKey(blockId)) return null;
         return diskBlockIdToTrajIdListMap.get(blockId);
+    }
+    
+    // may need to complete this function later if filtering by traj id is bad
+    public ArrayList<Trajectory> getTrajsByMultipleBlockId(int[] blockIds){
+        return null;
     }
     
     public void printTrajectories(){

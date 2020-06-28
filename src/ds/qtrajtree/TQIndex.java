@@ -46,8 +46,12 @@ public class TQIndex {
     private final int timeWindowInSec;
     
     private final DbInterface dbInterface;
+    private final String trajTableName;
+    private final int fetchSize;
+    private final int numOfRows;
+    private final int commitAfterTrajs;
     
-    public TQIndex(TrajStorage trajStorage, int timeWindowInSec) throws SQLException {
+    public TQIndex(TrajStorage trajStorage, String trajTableName, int fetchSize,int numOfRows, int commitAfterTrajs,  int timeWindowInSec) throws SQLException {
         
         this.trajStorage = trajStorage;
         
@@ -78,8 +82,11 @@ public class TQIndex {
         long fromTime = System.currentTimeMillis();
         // String normalizedPointQuery = "SELECT anonymous_id, (point).lat, (point).lng, (point).ts FROM raw_data where ts::date = ?";
         
-        final String trajTableName = "normalized_trajectory_day_one";
-        // final String trajTableName = "normalized_trajectory";    // 7 days
+        this.trajTableName = trajTableName;
+        this.fetchSize = fetchSize;
+        this.numOfRows = numOfRows;
+        this.commitAfterTrajs = commitAfterTrajs;
+        
         
         // resetting if anything from previous run exists
         String resetBlockIdQuery = "update " + trajTableName + " set rtree_block_id = -1";
@@ -95,14 +102,13 @@ public class TQIndex {
         long toTime = System.currentTimeMillis();
         System.out.println("Rtree block ids and its index reset, required time = " + (toTime-fromTime)/1000 + " seconds");
         
-        final int fetchSize = 1000;    // small during dev, larger during run
-        final int numOfRows = 10000;    // small during dev, to be removed during run
-        final int commitAfterTrajs = 1000; // small during dev, larger during run
+        String normalizedTrajQuery = "select anonymous_id, normalized_points from " + trajTableName;
+        if (numOfRows != -1) normalizedTrajQuery += " LIMIT ?";
         
-        String normalizedTrajQuery = "select anonymous_id, normalized_points from " + trajTableName + " LIMIT ?";
         pstmt = dbInterface.getConnection().prepareStatement(normalizedTrajQuery);
         
-        pstmt.setInt(1, numOfRows);
+        if (numOfRows != -1) pstmt.setInt(1, numOfRows);
+        
         pstmt.setFetchSize(fetchSize);
         
         int trajsProcessed = 0;
@@ -225,7 +231,6 @@ public class TQIndex {
         
         toTime = System.currentTimeMillis();
         System.out.println("QR-tree index built, time : " + (toTime-fromTime)/1000 + " seconds");
-        System.exit(0);
     }
     
     private void addTrajectories(ArrayList<Trajectory> trajectories) {
