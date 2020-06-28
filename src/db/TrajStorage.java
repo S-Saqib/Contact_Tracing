@@ -10,18 +10,15 @@ import ds.qtree.Point;
 import ds.trajectory.Trajectory;
 import ds.transformed_trajectory.TransformedTrajPoint;
 import ds.transformed_trajectory.TransformedTrajectory;
-import java.sql.Connection;
-import java.sql.DriverManager;
+import java.sql.Array;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Properties;
 /**
  *
  * @author Saqib
@@ -29,9 +26,7 @@ import java.util.Properties;
 public class TrajStorage {
     private HashMap<String, Trajectory> trajData;   // db
     private HashMap<String, TransformedTrajectory> transformedTrajData; // db
-    private final int chunkSize;
-    private int cursor;
-    private HashMap<Node, ArrayList<Point>> tempQNodeToPointListMap;    // db
+
     private HashMap<String, Integer> trajIdToDiskBlockIdMap;    // in memory
     private HashMap<Integer, ArrayList<String>> diskBlockIdToTrajIdListMap; // in memory
     private ArrayList<String> []pointWiseTrajIdList;    // for query traj selection
@@ -39,77 +34,49 @@ public class TrajStorage {
     // data related stats required at different places
     private final double latCoeff, latConst, lonCoeff, lonConst, maxLat, maxLon, minLat, minLon;
     private final long minTimeInSec;
-    private final int trajCount;
+    
+    private final DbInterface dbInterface;
     
     public TrajStorage() throws SQLException {
         this.trajData = new HashMap<String, Trajectory>();
         this.transformedTrajData = new HashMap<String, TransformedTrajectory>();
-        chunkSize = 10000;
-        cursor = 0;
-        this.tempQNodeToPointListMap = new HashMap<Node, ArrayList<Point>>();
         this.diskBlockIdToTrajIdListMap = new HashMap<Integer, ArrayList<String>>();
         
-        // initialize stats related variables properly from database, change 0 values
-        this.latCoeff = 0;
-        this.latConst = 0;
-        this.lonCoeff = 0;
-        this.lonConst = 0;
+        // initialize stats related variables properly from database
+        long fromTime = System.currentTimeMillis();
+        this.dbInterface = new DbInterface();
         
-        this.maxLat = 0;
-        this.maxLon = 0;
-        this.minLat = 0;
-        this.minLon = 0;
+        String statsQuery = "SELECT max((point).lat), max((point).lng), min((point).lat), min((point).lng), min((point).ts) FROM raw_data";
+        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(statsQuery);
         
-        this.minTimeInSec = 0;
-        
-        this.trajCount = 0;
-        
-        // testing with db
-        // try to connect to database
-        String url = "jdbc:postgresql://ec2-3-132-194-145.us-east-2.compute.amazonaws.com:5432/contact_tracing";
-        Properties props = new Properties();
-        props.setProperty("user","contact_tracing");
-        props.setProperty("password","datalabctq");
-        // props.setProperty("ssl","true");
-        props.setProperty("sslmode","require");
-        Connection conn = DriverManager.getConnection(url, props);
-        
-        /*
-        String url = "jdbc:postgresql://ec2-3-132-194-145.us-east-2.compute.amazonaws.com:5432/contact_tracing?user=contact_tracing&password=datalabctq&ssl=true";
-        Connection conn = DriverManager.getConnection(url);
-        */
-        System.out.println("Connection is successful");
-        Statement stmt = conn.createStatement();
-        
-        String SQL = "SELECT * FROM raw_data LIMIT 10";
-        ResultSet rs = stmt.executeQuery(SQL);
-        while (rs.next()){
-            int pointId = rs.getInt(1);
-            String anonymizedId = rs.getString(2);
-            double lat = rs.getDouble(3);
-            double lon = rs.getDouble(4);
-            Timestamp timeStamp = rs.getTimestamp(5);
+        ResultSet rs = pstmt.executeQuery();
+        if(rs.next()){
+            this.maxLat = rs.getDouble(1);
+            this.maxLon = rs.getDouble(2);
+            this.minLat = rs.getDouble(3);
+            this.minLon = rs.getDouble(4);
+            this.minTimeInSec = rs.getLong(5);
             
-            System.out.println(pointId + " : " + anonymizedId + " (" + lat + "," + lon + "), " + timeStamp + " = " + timeStamp.getTime()/1000);
+            this.latConst = this.minLat;
+            this.lonConst = this.minLon;
+            this.latCoeff = (this.maxLat - this.minLat)/100.0;
+            this.lonCoeff = (this.maxLon - this.minLon)/100.0;
+        }
+        else{
+            this.maxLat = 0;
+            this.maxLon = 0;
+            this.minLat = 0;
+            this.minLon = 0;
+            this.minTimeInSec = 00;
+            
+            this.latConst = 0;
+            this.lonConst = 0;
+            this.latCoeff = 0;
+            this.lonCoeff = 0;
         }
         
-        System.out.println("Using prepared statement");
-        SQL = "SELECT * FROM raw_data where anonymous_id = ? LIMIT ?";
-        PreparedStatement pstmt = conn.prepareStatement(SQL);
-        pstmt.setString(1, "AAH03JAAQAAAO9VAA/");
-        pstmt.setInt(2, 7);
-        rs = pstmt.executeQuery();
-        while (rs.next()){
-            int pointId = rs.getInt(1);
-            String anonymizedId = rs.getString(2);
-            double lat = rs.getDouble(3);
-            double lon = rs.getDouble(4);
-            Timestamp timeStamp = rs.getTimestamp(5);
-            
-            System.out.println(pointId + " : " + anonymizedId + " (" + lat + "," + lon + "), " + timeStamp + " = " + timeStamp.getTime()/1000);
-        }
-        
-        conn.close();
+        long toTime = System.currentTimeMillis();
+        System.out.println("Stats retrieval : " + (toTime-fromTime)/1000 + " seconds");
     }
 
     public HashMap<String, Trajectory> getTrajData() {
@@ -123,62 +90,109 @@ public class TrajStorage {
     public ArrayList<Trajectory> getTrajDataAsList() {
         return new ArrayList<Trajectory>(trajData.values());
     }
-    
-    private boolean hasNext(){
-        return cursor < trajData.size();
-    }
-    
-    private void resetCursor(){
-        cursor = 0;
-    }
-    
-    // gives next x trajectories where x = chunkSize
-    public ArrayList<Trajectory> getNextChunkAsList(){
-        if (hasNext()){
-            int from = cursor;
-            int to = cursor + chunkSize;
-            if (to > trajData.size()){
-                to = trajData.size();
-            }
-            cursor = to;
-            //System.out.println("Returning chunk from " + from + " to " + to);
-            return new ArrayList<Trajectory>(getTrajDataAsList().subList(from, to));
-        }
-        else{
-            resetCursor();
-            return null;
-        }
-    }
-    
+        
     public Trajectory getTrajectoryById(String Id){
         Trajectory trajectory = trajData.get(Id);
         return trajectory;
     }
-    
-    // all points of a leaf should be propagated to its child during splitting
-    public ArrayList<Point> getPointsFromQNode(Node qNode){
-        if (tempQNodeToPointListMap.containsKey(qNode)){
-            return tempQNodeToPointListMap.get(qNode);
+        
+    public ArrayList<Point> getPointsFromQNode(Node qNode) throws SQLException{
+        // SQL: select points from qnode_to_point_map where node = row(0, 0, 50, 50)::qnode;
+        String qNodePointFetchQuery = "select points, traj_ids from qnode_to_point_map where node = row(?, ?, ?, ?)::qnode";
+        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointFetchQuery);
+
+        pstmt.setDouble(1, qNode.getX());
+        pstmt.setDouble(2, qNode.getY());
+        pstmt.setDouble(3, qNode.getW());
+        pstmt.setDouble(4, qNode.getH());
+
+        ArrayList<Point> qNodePointList = new ArrayList<Point>();
+
+        ResultSet rs = pstmt.executeQuery();
+        while (rs.next()){
+            Array pointArray = rs.getArray(1);
+            Object[] pointList = (Object[])pointArray.getArray();
+            Array trajIdArray = rs.getArray(2);
+            Object[] trajIdList = (Object[])trajIdArray.getArray();
+            int curTrajIndex = 0;
+            for(Object ptObj : pointList){
+                Point point = new Point(ptObj, trajIdList[curTrajIndex++]);
+                qNodePointList.add(point);
+            }
         }
-        return null;
+
+        if (qNodePointList.size() == 0){
+            System.out.println("Something went wrong while retrieving point lisf of qnode " + qNode);
+        }
+        return qNodePointList;
     }
     
-    public void addPointToQNode(Node qNode, Point point){
-        if (!tempQNodeToPointListMap.containsKey(qNode)){
-            tempQNodeToPointListMap.put(qNode, new ArrayList<Point>());
+    public void addPointToQNode(Node qNode, Point point) throws SQLException{
+        String qNodePointMapNodeInsQuery = "insert into qnode_to_point_map (node) values (row(?, ?, ?, ?)) on conflict do nothing;";
+        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointMapNodeInsQuery);
+
+        pstmt.setDouble(1, qNode.getX());
+        pstmt.setDouble(2, qNode.getY());
+        pstmt.setDouble(3, qNode.getW());
+        pstmt.setDouble(4, qNode.getH());
+
+        int affectedRows = pstmt.executeUpdate();
+
+        if (affectedRows > 1){
+            System.out.println("Something went wrong while inserting qnode " + qNode);
+            System.out.println(affectedRows + " Rows affected");
         }
-        tempQNodeToPointListMap.get(qNode).add(point);
+        
+        // tempQNodeToPointListMap.get(qNode).add(point);
+        
+        String qNodePointMapPointInsQuery = "update qnode_to_point_map set points = array_append(points,row(?, ?, ?)::trajectory_point),"
+                                            + " traj_ids = array_append(traj_ids,?) where node = row(?, ?, ?, ?)::qnode;";
+        pstmt = dbInterface.getConnection().prepareStatement(qNodePointMapPointInsQuery);
+        
+        pstmt.setDouble(1, point.getX());
+        pstmt.setDouble(2, point.getY());
+        pstmt.setLong(3, point.getTimeInSec());
+        pstmt.setString(4, (String)point.getTraj_id());
+        
+        pstmt.setDouble(5, qNode.getX());
+        pstmt.setDouble(6, qNode.getY());
+        pstmt.setDouble(7, qNode.getW());
+        pstmt.setDouble(8, qNode.getH());
+        
+        affectedRows = pstmt.executeUpdate();
+        
+        if (affectedRows != 1){
+            System.out.println("Something went wrong while inserting point " + point + " at " + qNode);
+        }
     }
     
     // a node should be removed after it is no longer leaf (becomes pointer)
-    public void removePointListFromQNode(Node qNode){
-        if (tempQNodeToPointListMap.containsKey(qNode)){
-            tempQNodeToPointListMap.remove(qNode);
+    public void removePointListFromQNode(Node qNode) throws SQLException{            
+        // SQL: delete from qnode_to_point_map where node = row(50, 75, 25, 25)::qnode;
+        String qNodePointDeleteQuery = "delete from qnode_to_point_map where node = row(?, ?, ?, ?)::qnode";
+        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointDeleteQuery);
+
+        pstmt.setDouble(1, qNode.getX());
+        pstmt.setDouble(2, qNode.getY());
+        pstmt.setDouble(3, qNode.getW());
+        pstmt.setDouble(4, qNode.getH());
+
+        int affectedRows = pstmt.executeUpdate();
+
+        if (affectedRows != 1){
+            System.out.println("Something went wrong while deleting row of qnode " + qNode);
         }
     }
     
-    public void clearQNodeToPointListMap(){
-        tempQNodeToPointListMap.clear();
+    public void clearQNodeToPointListMap() throws SQLException{
+        // tempQNodeToPointListMap.clear();
+        String qNodePointClearQuery = "delete from qnode_to_point_map";
+        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointClearQuery);
+        int affectedRows = pstmt.executeUpdate();
+
+        if (affectedRows == 0){
+            System.out.println("Something went wrong while deleting all rows of qnode point map table");
+        }
     }
     
     // should we pass transformed trajectory data chunk by chunk?
@@ -207,8 +221,10 @@ public class TrajStorage {
     }
     
     public void addValueToTransformedTrajData(String id, TransformedTrajPoint transformedTrajPoint){
+        // transformed trajectory: remove point addition, min max value update for envelope
         addKeyToTransformedTrajData(id);
-        transformedTrajData.get(id).addTransformedTrajPoint(transformedTrajPoint);
+        //transformedTrajData.get(id).addTransformedTrajPoint(transformedTrajPoint);
+        transformedTrajData.get(id).updateMinMaxBounds(transformedTrajPoint);
     }
     
     public HashMap<String, Integer> getTrajIdToDiskBlockIdMap() {
@@ -219,7 +235,7 @@ public class TrajStorage {
         this.trajIdToDiskBlockIdMap = trajToDiskBlockIdMap;
     }
     
-    public void setDiskBlockIdToTrajIdListMap(){
+    public void setDiskBlockIdToTrajIdListMap() throws SQLException{
         for (Map.Entry<String, Integer> entry : trajIdToDiskBlockIdMap.entrySet()) {
             String trajId = entry.getKey();
             Integer blockId = entry.getValue();
@@ -227,7 +243,36 @@ public class TrajStorage {
                 diskBlockIdToTrajIdListMap.put(blockId, new ArrayList<String>());
             }
             diskBlockIdToTrajIdListMap.get(blockId).add(trajId);
+            
+            // update normalized trajectory table column in database
+            //SQL: update normalized_trajectory_day_one set rtree_block_id = 0 where anonymous_id = 'AAH03JAAQAAAO9VAA4'
+            final String trajTableName = "normalized_trajectory_day_one";
+            String updateDiskBlockQuery = "update " + trajTableName + " set rtree_block_id = ? where anonymous_id = ?";
+            PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(updateDiskBlockQuery);
+
+            pstmt.setInt(1, blockId);
+            pstmt.setString(2, trajId);
+            
+            int affectedRows = pstmt.executeUpdate();
+
+            if (affectedRows != 1){
+                System.out.println("Something went wrong while assigning disk block id to trajectory " + trajId);
+            }
+            
         }
+    }
+    
+    public void clusterTrajData() throws SQLException{
+        final String trajTableName = "normalized_trajectory_day_one";
+        final String indexName = "rtree_block_id_" + trajTableName + "_idx";
+                
+        String indexQuery = "create index " + indexName + " on " + trajTableName + " (rtree_block_id)";
+        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(indexQuery);
+        pstmt.execute();
+        
+        String clusterQuery = "cluster " + trajTableName + " using " + indexName;
+        pstmt = dbInterface.getConnection().prepareStatement(clusterQuery);
+        pstmt.execute();
     }
     
     public Object getDiskBlockIdByTrajId(String id){
@@ -345,6 +390,10 @@ public class TrajStorage {
     }
     
     public int getTrajCount(){
-        return this.trajCount;
+        return this.trajIdToDiskBlockIdMap.size();
+    }
+    
+    public DbInterface getDbInterface(){
+        return dbInterface;
     }
 }

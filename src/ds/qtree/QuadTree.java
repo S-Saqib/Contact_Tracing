@@ -3,6 +3,7 @@ package ds.qtree;
 import db.TrajStorage;
 import ds.transformed_trajectory.TransformedTrajPoint;
 import ds.transformed_trajectory.TransformedTrajectory;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -64,11 +65,13 @@ public class QuadTree {
      * @param {double} y The y-coordinate.
      * @param {Object} value The value associated with the point.
      */
-    public int set(double x, double y, long timeInSec, Object value, Object trajId) {
+    public int set(double x, double y, long timeInSec, Object value, Object trajId) throws SQLException {
 
         Node root = this.root_;
         if (x < root.getX() || y < root.getY() || x > root.getX() + root.getW() || y > root.getY() + root.getH()) {
-            throw new QuadTreeException("Out of bounds : (" + x + ", " + y + ")");
+            // throw new QuadTreeException("Out of bounds : (" + x + ", " + y + ")");
+            System.out.println("Out of bounds : (" + x + ", " + y + ")");
+            return -1;
         }
         int splitCount=this.insert(root, new Point(x, y, timeInSec, value, trajId));
         if (splitCount >= 0) {
@@ -122,7 +125,7 @@ public class QuadTree {
     /**
      * Removes all items from the tree.
      */
-    public void clear() {
+    public void clear() throws SQLException {
         this.root_.setNw(null);
         this.root_.setNe(null);
         this.root_.setSw(null);
@@ -210,7 +213,7 @@ public class QuadTree {
      *     or null if it doesn't exist.
      * @private
      */
-    public Node find(Node node, double x, double y) {
+    public Node find(Node node, double x, double y) throws SQLException {
         Node response = null;
         switch (node.getNodeType()) {
             case EMPTY:
@@ -245,7 +248,7 @@ public class QuadTree {
      *     reset.
      * @private
      */
-    private int insert(Node parent, Point point) {
+    private int insert(Node parent, Point point) throws SQLException {
         int result = 0;
         switch (parent.getNodeType()) {
             case EMPTY:
@@ -301,7 +304,7 @@ public class QuadTree {
      * @param {QuadTree.Node} node The node to split.
      * @private
      */
-    private void split(Node node) {
+    private void split(Node node) throws SQLException {
         ArrayList <Point> oldPoints = trajStorage.getPointsFromQNode(node);
 
         node.setNodeType(NodeType.POINTER);
@@ -354,7 +357,7 @@ public class QuadTree {
      * @param {QuadTree.Point} point The point to set.
      * @private
      */
-    private void addPointToNode(Node node, Point point) {
+    private void addPointToNode(Node node, Point point) throws SQLException {
         if (node.getNodeType() == NodeType.POINTER) {
             System.out.println("Can not set point for node of type POINTER for node " + node);
             throw new QuadTreeException("Can not set point for node of type POINTER");
@@ -391,7 +394,7 @@ public class QuadTree {
         return zCode;
     }
     
-    public void transformTrajectories(Node node){
+    public void transformTrajectories(Node node) throws SQLException{
         if (node.getNodeType() == NodeType.EMPTY){
             // just added for safety, should not reach here
             return;
@@ -417,36 +420,8 @@ public class QuadTree {
         transformTrajectories(node.getSw());
         transformTrajectories(node.getSe());
     }
-
-    // saves transformed trajectories in trajStorage, the spatio-temporal transformation works on their points
-    public void transformTrajectoriesQ2R(Node node){
-        if (node.getNodeType() == NodeType.EMPTY){
-            // just added for safety, should not reach here
-            return;
-        }
-        if (node.getNodeType() == NodeType.LEAF){
-            // ArrayList <Point> pointList = trajStorage.getPointsFromQId_QNode(this.zCode, node);
-            ArrayList <Point> pointList = trajStorage.getPointsFromQNode(node);
-            for (Point point : pointList){
-                int timeIndex = getTimeIndex(point.getTimeInSec());
-                node.addTimeKey(timeIndex);
-                if (timeIndex >= 0){
-                    long qNodeIndex = node.getZCode();
-                    TransformedTrajPoint transformedTrajPoint = new TransformedTrajPoint(qNodeIndex, timeIndex);
-                    String trajId = (String)point.getTraj_id();
-                    trajStorage.addValueToTransformedTrajData(trajId, transformedTrajPoint);
-                    // zCode of root is a unique identifier of quadtree, so passing it for traj identification
-                }
-            }
-            return;
-        }
-        transformTrajectoriesQ2R(node.getNw());
-        transformTrajectoriesQ2R(node.getNe());
-        transformTrajectoriesQ2R(node.getSw());
-        transformTrajectoriesQ2R(node.getSe());
-    }
     
-    public void makeTimeIndex(Node node){
+    public void makeTimeIndex(Node node) throws SQLException{
         if (node.getNodeType() == NodeType.EMPTY){
             // just added for safety, should not reach here
             return;
@@ -465,7 +440,7 @@ public class QuadTree {
         makeTimeIndex(node.getSe());
     }
     
-    public void tagDiskBlockIdsToNodes(Node node){
+    public void tagDiskBlockIdsToNodes(Node node) throws SQLException{
         if (node.getNodeType() == NodeType.EMPTY){
             // just added for safety, should not reach here
             return;

@@ -24,6 +24,16 @@ public class TrajPoint {
         this.pointLocation = pointLocation;
         this.timeInSec = timeInSec;
     }
+    
+    // constructing from the object received from database
+    public TrajPoint(Object trajPoint){
+        // expectation = Object contains comma separated lat, lon, timestamp
+        String[] objValues = trajPoint.toString().split(",");
+        double lat = Double.parseDouble(objValues[0].substring(1));
+        double lon = Double.parseDouble(objValues[1]);
+        pointLocation = new Coordinate(lat, lon);
+        timeInSec = Long.parseLong(objValues[2].substring(0, objValues[2].length()-1));
+    }
 
     public void setPointLocation(Coordinate pointLocation) {
         this.pointLocation = pointLocation;

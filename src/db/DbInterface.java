@@ -1,0 +1,55 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package db;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.util.Properties;
+
+/**
+ *
+ * @author Saqib
+ */
+public class DbInterface {
+    private final String dbUrl, dbUser, dbPassword;
+    Properties properties;
+    private Connection conn;
+
+    public DbInterface() {
+        dbUrl = "jdbc:postgresql://ec2-3-132-194-145.us-east-2.compute.amazonaws.com:5432/contact_tracing";
+        dbUser = "contact_tracing";
+        dbPassword = "datalabctq";
+        properties = new Properties();
+        properties.setProperty("user","contact_tracing");
+        properties.setProperty("password","datalabctq");
+        properties.setProperty("sslmode","require");
+        conn = null;
+    }
+    
+    public Connection getConnection() throws SQLException{
+        if (conn == null || conn.isClosed()){
+            conn = DriverManager.getConnection(dbUrl, properties);
+            conn.setAutoCommit(false);
+        }
+        return conn;
+    }
+    
+    public void freeConnection() throws SQLException{
+        if (conn != null && !conn.isClosed()){
+            conn.close();
+        }
+    }
+    
+    public void commit() throws SQLException{
+        if (conn == null || conn.isClosed()){
+            System.out.println("Connection not open, cannot commit");
+        }
+        else{
+            conn.commit();
+        }
+    }
+}

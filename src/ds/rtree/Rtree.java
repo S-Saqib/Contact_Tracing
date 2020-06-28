@@ -29,7 +29,8 @@ public class Rtree {
         
         transformedTrajectories.entrySet().forEach((entry) -> {
             TransformedTrajectory traj = entry.getValue();
-            traj.setEnvelope();
+            //traj.setEnvelope();
+            traj.setEnvelope(true); // true means min, max bounds are already updated
             this.tree = this.tree.add(entry.getKey(), traj.getEnvelope());
         });
     }
@@ -54,26 +55,4 @@ public class Rtree {
         });
         return trajectoryToLeafMapping;
     }
-    
-    public HashMap<String, Pair<Long, Integer>> getTrajectoryToQId_LeafMapping(long zCode){
-        HashMap<String, Pair<Long, Integer>> trajectoryToLeafMapping = new HashMap<>();
-        Integer[] leafCount = new Integer[]{0};
-        this.tree.visit(new Visitor<String, Geometry>() {
-
-            @Override
-            public void leaf(Leaf<String, Geometry> node) {
-                node.entries().forEach((entry) -> {
-                    trajectoryToLeafMapping.put(entry.value(), new Pair<>(zCode, leafCount[0]));
-                });
-                leafCount[0]++;
-            }
-
-            @Override
-            public void nonLeaf(NonLeaf<String, Geometry> node) {
-                //System.out.println(node);
-            }
-        });
-        return trajectoryToLeafMapping;
-    }
-    
 }

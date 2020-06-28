@@ -12,12 +12,18 @@ public class TransformedTrajectory {
     private long userId;
     private String anonymizedId;
     private String contactNo;
+    private double minQnodeIndex;
+    private double minTimeIndex;
+    private double maxQnodeIndex; 
+    private double maxTimeIndex;
 
     public TransformedTrajectory() {
         transformedPointList = new TreeSet<TransformedTrajPoint>(new TransformedTrajPointComparator());
         anonymizedId = new String();
         contactNo = null;
         userId = -1;
+        minQnodeIndex = minTimeIndex = Double.MAX_VALUE;
+        maxQnodeIndex = maxTimeIndex = Double.MIN_VALUE;
     }
     
     public TransformedTrajectory(String anonymizedId, long userId){
@@ -25,6 +31,8 @@ public class TransformedTrajectory {
         this.anonymizedId = anonymizedId;
         this.userId = userId;
         contactNo = null;
+        minQnodeIndex = minTimeIndex = Double.MAX_VALUE;
+        maxQnodeIndex = maxTimeIndex = Double.MIN_VALUE;
     }
     
     public TransformedTrajectory(TreeSet<TransformedTrajPoint> pointList) {
@@ -32,6 +40,8 @@ public class TransformedTrajectory {
         anonymizedId = new String();
         contactNo = null;
         userId = -1;
+        minQnodeIndex = minTimeIndex = Double.MAX_VALUE;
+        maxQnodeIndex = maxTimeIndex = Double.MIN_VALUE;
     }
     
     public void setTransformedPointList(TreeSet<TransformedTrajPoint> transformedPointList) {
@@ -73,11 +83,18 @@ public class TransformedTrajectory {
         }
         transformedPointList.add(p);
     }
-    
+      
     public boolean contains(TransformedTrajPoint p){
         return transformedPointList.contains(p);
     }
 
+    public void updateMinMaxBounds(TransformedTrajPoint p){
+        minQnodeIndex = Math.min(minQnodeIndex, p.getqNodeIndex());
+        maxQnodeIndex = Math.max(maxQnodeIndex, p.getqNodeIndex());
+        minTimeIndex = Math.min(minTimeIndex, p.getTimeIndex());
+        maxTimeIndex = Math.max(maxTimeIndex, p.getTimeIndex());
+    }
+    
     public void setEnvelope() {
         double minQnodeIndex, maxQnodeIndex, minTimeIndex, maxTimeIndex;
         minQnodeIndex = minTimeIndex = Double.MAX_VALUE;
@@ -91,6 +108,15 @@ public class TransformedTrajectory {
         double[] mins = new double[]{minQnodeIndex, minTimeIndex};
         double[] maxes = new double[]{maxQnodeIndex, maxTimeIndex};
         this.envelope = Rectangle.create(mins, maxes);
+    }
+    
+    public void setEnvelope(boolean minMaxBoundsUpdated){
+        if (minMaxBoundsUpdated){
+            double[] mins = new double[]{minQnodeIndex, minTimeIndex};
+            double[] maxes = new double[]{maxQnodeIndex, maxTimeIndex};
+            this.envelope = Rectangle.create(mins, maxes);
+        }
+        else setEnvelope();
     }
 
     public Rectangle getEnvelope() {

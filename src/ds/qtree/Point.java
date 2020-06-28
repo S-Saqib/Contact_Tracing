@@ -22,6 +22,17 @@ public class Point{
         this.opt_value = opt_value;
         this.traj_id = traj_id;
     }
+    
+    public Point(Object PointObj, Object trajIdObj){
+        // expectation = Object contains comma separated lat, lon, timestamp
+        String[] objValues = PointObj.toString().split(",");
+        this.x = Double.parseDouble(objValues[0].substring(1));
+        this.y = Double.parseDouble(objValues[1]);
+        this.timeInSec = Long.parseLong(objValues[2].substring(0, objValues[2].length()-1));
+        this.opt_value = null;
+        this.traj_id = trajIdObj.toString();
+        // System.out.println(traj_id);
+    }
 
     public double getX() {
         return x;
