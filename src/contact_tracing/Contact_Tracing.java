@@ -42,29 +42,54 @@ public class Contact_Tracing {
         temporalProximity *= 60;    // in seconds
         int maxRecursionDepth = 1;
         
-        // move the following values (index params and db params) to a text file so that jar does not have to be rebuilt for making some changes
+        // move the following values (index params and db params) to a text file hyperparam.txt so that jar does not have to be rebuilt for making some changes
         // index params
-        int timeWindowInSec = 30*60;
         int qNodePointCapacity = 128;
+        int timeWindowInSec = 30*60;
         int rTreeBlockTrajCapacity = 4;
         // using default temporal proximity as the time window used in index
         
         // db params
-        final String trajTableName = "normalized_trajectory_day_one";
-        final int fetchSize = 10000;    // small during dev, larger during run
-        final int numOfRows = 20;    // small during dev, removed during run
-        final int commitAfterTrajs = 10000;    // small during dev, larger during run
+        String dbLocation = "ec2-3-132-194-145.us-east-2.compute.amazonaws.com";
+        String trajTableName = "normalized_trajectory_day_one";
+        int fetchSize = 10000;    // small during dev, larger during run
+        int numOfRows = 200;    // small during dev, removed during run
+        int commitAfterTrajs = 10000;    // small during dev, larger during run
+        
+        String hyperparamFilePath = "../hyperparam.txt";
+        File hyperparamFile = new File(hyperparamFilePath);
+        if (hyperparamFile.exists()){
+            BufferedReader br = new BufferedReader(new FileReader(hyperparamFile));
+            br.readLine();  // ignore the first line which contains explanation
+            
+            qNodePointCapacity = Integer.parseInt(br.readLine());
+            timeWindowInSec = Integer.parseInt(br.readLine());
+            rTreeBlockTrajCapacity = Integer.parseInt(br.readLine());
+            
+            dbLocation = br.readLine();
+            trajTableName = br.readLine();
+            
+            fetchSize = Integer.parseInt(br.readLine());
+            numOfRows = Integer.parseInt(br.readLine());
+            commitAfterTrajs = Integer.parseInt(br.readLine());
+            
+            System.out.println("Loaded hyper parameters from text file");
+        }
+        else{
+            System.out.println("Continuing with default hyper parameters, as specified in code");
+        }
         
         long fromTime = System.nanoTime();
         // create an object of TrajStorage to imitate database functionalities
-        TrajStorage trajStorage = new TrajStorage(trajTableName, fetchSize);
+        TrajStorage trajStorage = new TrajStorage(trajTableName, fetchSize, dbLocation);
         
-        TQIndex quadTrajTree = new TQIndex(trajStorage, trajTableName, fetchSize, numOfRows, commitAfterTrajs, timeWindowInSec);
+        TQIndex quadTrajTree = new TQIndex(trajStorage, dbLocation, trajTableName, fetchSize, numOfRows, commitAfterTrajs,
+                                            qNodePointCapacity, timeWindowInSec, rTreeBlockTrajCapacity);
         long toTime = System.nanoTime();
         System.out.println("Index built for " + trajStorage.getTrajCount() + " Trajs, time: " + (toTime-fromTime)/1.0e9);
         System.out.println("Now the program will wait for input in an infinite loop.\n"
-                + "Give spatial proximity in meter, followed by temporal proximity in minutes, followed by recursion depth,"
-                + "followed by ranking method, followed by comma separated trajectory ids");
+                + "Give spatial proximity in meter, followed by temporal proximity in minutes, followed by recursion depth, "
+                + "followed by ranking method, followed by comma separated trajectory ids (without space/tab/newline)");
         Scanner sc = new Scanner(System.in);
         int rankingMethod;  // 0 denotes earliest exposure, 1 denotes number of exposure
         String [] trajIds;

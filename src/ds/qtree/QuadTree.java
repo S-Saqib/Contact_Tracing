@@ -27,6 +27,7 @@ public class QuadTree {
     private int height;
     private final TrajStorage trajStorage;
     private final long minTimeInSec;
+    private final int qNodePointCapacity;
     private final int timeWindowInSec;
     
     /**
@@ -37,15 +38,16 @@ public class QuadTree {
      * @param {double} maxX Maximum x-value that can be held in tree.
      * @param {double} maxY Maximum y-value that can be held in tree.
      */
-    public QuadTree(TrajStorage trajStorage, double minX, double minY, double maxX, double maxY, long minTimeInSec, int timeWindowInSec) {
+    public QuadTree(TrajStorage trajStorage, double minX, double minY, double maxX, double maxY, long minTimeInSec, int qNodePointCapacity, int timeWindowInSec) {
         count_ = 0;
         nodeCount = 1;
         zCode = 0;
         height = 0;
         this.trajStorage = trajStorage;
-        this.root_ = new Node(minX, minY, maxX - minX, maxY - minY, null, 0);
+        this.root_ = new Node(minX, minY, maxX - minX, maxY - minY, null, 0, qNodePointCapacity);
         this.minTimeInSec = minTimeInSec;
         this.timeWindowInSec = timeWindowInSec;
+        this.qNodePointCapacity = qNodePointCapacity;
     }
 
     /**
@@ -319,10 +321,10 @@ public class QuadTree {
         int childDepth = node.getDepth() + 1;
         height = Integer.max(height, childDepth);
 
-        node.setNw(new Node(x, y, hw, hh, node, childDepth));
-        node.setNe(new Node(x + hw, y, hw, hh, node, childDepth));
-        node.setSw(new Node(x, y + hh, hw, hh, node, childDepth));
-        node.setSe(new Node(x + hw, y + hh, hw, hh, node, childDepth));
+        node.setNw(new Node(x, y, hw, hh, node, childDepth, qNodePointCapacity));
+        node.setNe(new Node(x + hw, y, hw, hh, node, childDepth, qNodePointCapacity));
+        node.setSw(new Node(x, y + hh, hw, hh, node, childDepth, qNodePointCapacity));
+        node.setSe(new Node(x + hw, y + hh, hw, hh, node, childDepth, qNodePointCapacity));
 
         for (Point point: oldPoints){
             this.insert(node, point);

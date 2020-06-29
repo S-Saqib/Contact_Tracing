@@ -43,7 +43,9 @@ public class TQIndex {
     private final double latCoeff, latConst, lonCoeff, lonConst;
     private final double maxLat, maxLon, minLat, minLon;
     private final long minTimeInSec;
+    private final int qNodePointCapacity;
     private final int timeWindowInSec;
+    private final int rTreeBlockTrajCapacity;
     
     private final DbInterface dbInterface;
     private final String trajTableName;
@@ -51,7 +53,8 @@ public class TQIndex {
     private final int numOfRows;
     private final int commitAfterTrajs;
     
-    public TQIndex(TrajStorage trajStorage, String trajTableName, int fetchSize,int numOfRows, int commitAfterTrajs,  int timeWindowInSec) throws SQLException {
+    public TQIndex(TrajStorage trajStorage, String dbLocation, String trajTableName, int fetchSize,int numOfRows, int commitAfterTrajs,
+                    int qNodePointCapacity, int timeWindowInSec, int rTreeBlockTrajCapacity) throws SQLException {
         
         this.trajStorage = trajStorage;
         
@@ -67,15 +70,17 @@ public class TQIndex {
         
         this.minTimeInSec = trajStorage.getMinTimeInSec();
         
+        this.qNodePointCapacity = qNodePointCapacity;
         this.timeWindowInSec = timeWindowInSec;
+        this.rTreeBlockTrajCapacity = rTreeBlockTrajCapacity;
         
-        this.dbInterface = new DbInterface();
+        this.dbInterface = new DbInterface(dbLocation);
         
         qNodeTrajsCount = new HashMap<Node, Integer>();
         qNodeToAnonymizedTrajIdsMap = new HashMap<Node, ArrayList<String>>();
         qNodeToNextLevelIndexMap = new HashMap<Node, QuadTree>();
         
-        quadTree = new QuadTree(trajStorage, 0.0, 0.0, 100.0, 100.0, minTimeInSec, timeWindowInSec);    // since trajectories are already normalized in this range
+        quadTree = new QuadTree(trajStorage, 0.0, 0.0, 100.0, 100.0, minTimeInSec, qNodePointCapacity, timeWindowInSec);
         
         // now read data in chunks and build the first level quadtree
         
@@ -203,7 +208,7 @@ public class TQIndex {
 
             // grouping in transformed coordinates (QR tree)
             // deal chunkwise and pass to rtree accordingly
-            Rtree rTree = new Rtree(trajStorage.getTransformedTrajData());
+            Rtree rTree = new Rtree(trajStorage.getTransformedTrajData(), rTreeBlockTrajCapacity);
             
             toTime = System.currentTimeMillis();
             System.out.println("Trajectories grouped, time : " + (toTime-fromTime)/1000 + " seconds");
@@ -239,7 +244,7 @@ public class TQIndex {
             
             if (!qNodeToNextLevelIndexMap.containsKey(node)) {
                 qNodeToNextLevelIndexMap.put(node, new QuadTree(trajStorage, node.getX(), node.getY(), node.getX() + node.getW(), node.getY() + node.getH(),
-                                                                minTimeInSec, timeWindowInSec));
+                                                                minTimeInSec, qNodePointCapacity, timeWindowInSec));
                 qNodeToAnonymizedTrajIdsMap.put(node, new ArrayList<String>());
             }
             String anonymizedTrajId = trajectory.getAnonymizedId();

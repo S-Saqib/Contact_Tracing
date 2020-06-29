@@ -33,7 +33,7 @@ public class Node {
      * @param {Node}   opt_parent Optional parent node.
      * @constructor
      */
-    public Node(double x, double y, double w, double h, Node opt_parent, int depth) {
+    public Node(double x, double y, double w, double h, Node opt_parent, int depth, int nodeCapacity) {
         this.nodetype = NodeType.EMPTY;
         this.x = x;
         this.y = y;
@@ -42,7 +42,7 @@ public class Node {
         this.opt_parent = opt_parent;
         this.depth = depth;
         this.pointCount = 0;
-        this.nodeCapacity = 128;
+        this.nodeCapacity = nodeCapacity;
         this.timeBucketToDiskBlockIdMap = new HashMap<Integer, HashSet<Object>>();
         this.zCode = -1;
     }

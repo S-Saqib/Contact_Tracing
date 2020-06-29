@@ -22,10 +22,13 @@ import org.javatuples.Pair;
 public class Rtree {
     private HashMap<String, TransformedTrajectory> transformedTrajectories;
     private RTree<String, Geometry> tree;
+    private final int rTreeBlockTrajCapacity;
 
-    public Rtree(HashMap<String, TransformedTrajectory> transformedTrajectories) {
+    public Rtree(HashMap<String, TransformedTrajectory> transformedTrajectories, int rTreeBlockTrajCapacity) {
+        this.rTreeBlockTrajCapacity = rTreeBlockTrajCapacity;
+        
         this.transformedTrajectories = transformedTrajectories;
-        this.tree = RTree.star().dimensions(2).create();
+        this.tree = RTree.maxChildren(rTreeBlockTrajCapacity).star().dimensions(2).create();
         
         transformedTrajectories.entrySet().forEach((entry) -> {
             TransformedTrajectory traj = entry.getValue();

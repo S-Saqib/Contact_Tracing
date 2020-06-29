@@ -40,14 +40,14 @@ public class TrajStorage {
     private final String trajTableName;
     private final int fetchSize;
     
-    public TrajStorage(String trajTableName, int fetchSize) throws SQLException {
+    public TrajStorage(String trajTableName, int fetchSize, String dbLocation) throws SQLException {
         this.trajData = new HashMap<String, Trajectory>();
         this.transformedTrajData = new HashMap<String, TransformedTrajectory>();
         this.diskBlockIdToTrajIdListMap = new HashMap<Integer, ArrayList<String>>();
         
         // initialize stats related variables properly from database
         long fromTime = System.currentTimeMillis();
-        this.dbInterface = new DbInterface();
+        this.dbInterface = new DbInterface(dbLocation);
         
         this.trajTableName = trajTableName;
         this.fetchSize = fetchSize;
@@ -104,12 +104,18 @@ public class TrajStorage {
     
     public ArrayList<Trajectory> getTrajectoriesByMultipleIds(String[] trajIdList) throws SQLException{
         ArrayList<Trajectory> trajList = new ArrayList<Trajectory>();
-        
-        String normalizedTrajQuery = "select normalized_points from " + trajTableName + " where anonymous_id in + (?";
+        if (trajIdList.length == 0) return trajList;
+        String normalizedTrajQuery = "select normalized_points from " + trajTableName + " where anonymous_id in (?";
         for (int i=1; i<trajIdList.length; i++){
             normalizedTrajQuery += ",?";
         }
         normalizedTrajQuery += ")";
+        
+        /*
+        System.out.println(normalizedTrajQuery);
+        for (int i=0; i<trajIdList.length; i++) System.out.print(trajIdList[i] + " ");
+        System.out.println("");
+        */
         
         PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(normalizedTrajQuery);
         

@@ -19,8 +19,8 @@ public class DbInterface {
     Properties properties;
     private Connection conn;
 
-    public DbInterface() {
-        dbUrl = "jdbc:postgresql://ec2-3-132-194-145.us-east-2.compute.amazonaws.com:5432/contact_tracing";
+    public DbInterface(String dbLocation) {
+        dbUrl = "jdbc:postgresql://" + dbLocation + ":5432/contact_tracing";
         dbUser = "contact_tracing";
         dbPassword = "datalabctq";
         properties = new Properties();
