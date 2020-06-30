@@ -26,7 +26,7 @@ public class DbInterface {
         properties = new Properties();
         properties.setProperty("user","contact_tracing");
         properties.setProperty("password","datalabctq");
-        properties.setProperty("sslmode","require");
+        // properties.setProperty("sslmode","require");    // ssl may be turned off
         conn = null;
     }
     

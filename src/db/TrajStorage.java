@@ -52,7 +52,7 @@ public class TrajStorage {
         this.trajTableName = trajTableName;
         this.fetchSize = fetchSize;
         
-        String statsQuery = "SELECT max((point).lat), max((point).lng), min((point).lat), min((point).lng), min((point).ts) FROM raw_data";
+        String statsQuery = "SELECT max(lat), max(lng), min(lat), min(lng), extract (epoch from min(ts)) FROM raw_data";
         PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(statsQuery);
         
         ResultSet rs = pstmt.executeQuery();
