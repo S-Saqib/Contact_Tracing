@@ -5,6 +5,7 @@
  */
 package contact_tracing;
 
+import com.sun.net.httpserver.HttpServer;
 import com.vividsolutions.jts.util.Assert;
 import db.TrajStorage;
 import java.io.IOException;
@@ -14,14 +15,18 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.net.InetSocketAddress;
 import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Scanner;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import query.service.DistanceConverter;
 import query.service.ServiceQueryProcessor;
 import query.service.TestServiceQuery;
+import server.CTQHttpHandler;
 /**
  *
  * @author Saqib
@@ -94,6 +99,34 @@ public class Contact_Tracing {
         int rankingMethod;  // 0 denotes earliest exposure, 1 denotes number of exposure
         String [] trajIds;
         
+        String ipAddr = "localhost";
+        int port = 10001;
+        int backlog = 0;
+        int threadPoolSize = 10;
+        String serverConfigFilePath = "../server_config.txt";
+        File serverConfigFile = new File(serverConfigFilePath);
+        if (serverConfigFile.exists()){
+            BufferedReader br = new BufferedReader(new FileReader(serverConfigFile));
+            br.readLine();  // ignore the first line which contains explanation
+            
+            ipAddr = br.readLine();
+            port = Integer.parseInt(br.readLine());
+            backlog = Integer.parseInt(br.readLine());
+            threadPoolSize = Integer.parseInt(br.readLine());
+            
+            System.out.println("Loaded server parameters from config file");
+        }
+        
+        HttpServer server = HttpServer.create(new InetSocketAddress(ipAddr, port), backlog);
+        server.createContext("/ctq", new CTQHttpHandler(trajStorage, quadTrajTree));
+        
+        ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor)Executors.newFixedThreadPool(threadPoolSize);
+        server.setExecutor(threadPoolExecutor);
+        
+        server.start();
+        System.out.println("Server started at " + server.getAddress());
+        
+        /*
         while(true){
             // expect spatial proximity in meters
             spatialProximity = sc.nextDouble();
@@ -104,7 +137,7 @@ public class Contact_Tracing {
             maxRecursionDepth = sc.nextInt();
             // followed by rankingMethod (0: earliest exposure, 1: number of exposure)
             rankingMethod = sc.nextInt();
-            // followed by covid-19 positive user id (anonymized id)
+            // followed by covid-19 positive user ids (anonymized ids)
             trajIds = sc.next().split(",");
             
             DistanceConverter distanceConverter = new DistanceConverter(trajStorage.getMaxLon(), trajStorage.getMaxLat(),
@@ -117,5 +150,6 @@ public class Contact_Tracing {
             
             TestServiceQuery.run(trajStorage, quadTrajTree, facilityGraph, latProximity, lonProximity, temporalProximity, maxRecursionDepth, rankingMethod);
         }
+    */
     }
 }

@@ -16,7 +16,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.text.Format;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -29,7 +32,7 @@ public class TrajStorage {
     private HashMap<String, TransformedTrajectory> transformedTrajData; // db
 
     private HashMap<String, Integer> trajIdToDiskBlockIdMap;    // in memory
-    private HashMap<Integer, ArrayList<String>> diskBlockIdToTrajIdListMap; // in memory
+    private final HashMap<Integer, ArrayList<String>> diskBlockIdToTrajIdListMap; // in memory
     private ArrayList<String> []pointWiseTrajIdList;    // for query traj selection
     
     // data related stats required at different places
@@ -497,5 +500,19 @@ public class TrajStorage {
     
     public DbInterface getDbInterface(){
         return dbInterface;
+    }
+    
+    public double denormalizeLat(double lat){
+        return latCoeff*lat + latConst;
+    }
+    
+    public double denormalizeLon(double lon){
+        return lonCoeff*lon + lonConst;
+    }
+    
+    public String getTimestamp(long timeInSec){
+        Date date = new Date(timeInSec*1000);
+        Format format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        return format.format(date);
     }
 }

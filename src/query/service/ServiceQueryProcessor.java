@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.TreeSet;
+import org.javatuples.Pair;
 
 /**
  *
@@ -82,8 +83,8 @@ public class ServiceQueryProcessor {
     
     // actually calculates the overlaps with facility trajectory
     // should be called directly for QR-tree
-    public HashMap <String, TreeSet<TrajPoint>> calculateCover(QuadTree quadTree, ArrayList<Trajectory> facilityQuery,
-                                                    HashMap<String, TreeSet<TrajPoint>> contactInfo, HashSet<String> alreadyInfectedIds) throws SQLException {
+    public HashMap <String, TreeSet<TrajPoint>> calculateCover(QuadTree quadTree, ArrayList<Trajectory> facilityQuery, HashMap<String, TreeSet<TrajPoint>> contactInfo,
+                                                                HashMap<String, CTQResultTrajData> responseJsonMap) throws SQLException {
         for (Trajectory trajectory : facilityQuery) {
             String infectedAnonymizedId = trajectory.getAnonymizedId();
             for (TrajPoint trajPoint : trajectory.getPointList()) {
@@ -153,6 +154,15 @@ public class ServiceQueryProcessor {
                             if (checkT - infectedT >= 0 && checkT - infectedT <= temporalDisThreshold){
                                 if (!contactInfo.containsKey(checkId)){
                                     contactInfo.put((String)checkId, new TreeSet<TrajPoint>(new TrajPointComparator()));
+                                    if (!responseJsonMap.containsKey(checkId)){
+                                        responseJsonMap.put(checkId, new CTQResultTrajData());
+                                        for (TrajPoint responseTrajPoint : traj.getPointList()){
+                                            double lat = trajStorage.denormalizeLat(responseTrajPoint.getPointLocation().x);
+                                            double lon = trajStorage.denormalizeLat(responseTrajPoint.getPointLocation().y);
+                                            long ts = responseTrajPoint.getTimeInSec();
+                                            responseJsonMap.get(checkId).addPointToAllPoints(new Pair<Long, Pair<Double, Double>>(ts, new Pair<Double, Double>(lat,lon)));
+                                        }
+                                    }
                                 }
                                 contactInfo.get(checkId).add(point);
                             }
