@@ -32,7 +32,7 @@ public class TestServiceQuery {
             TreeSet<TrajPoint> facilityTrajPoints = facility.getPointList();
             for (TrajPoint trajPoint : facilityTrajPoints){
                 double lat = trajStorage.denormalizeLat(trajPoint.getPointLocation().x);
-                double lon = trajStorage.denormalizeLat(trajPoint.getPointLocation().y);
+                double lon = trajStorage.denormalizeLon(trajPoint.getPointLocation().y);
                 long ts = trajPoint.getTimeInSec();
                 ctqResult.addPointToAllPoints(new Pair<Long, Pair<Double, Double>>(ts, new Pair<Double, Double>(lat,lon)));
                 // exposed points contain all points in case of query trajectory
@@ -82,7 +82,7 @@ public class TestServiceQuery {
                 if (responseJsonMap.get(entry.getKey()).getExposureLevel() == level){
                     for (TrajPoint responseTrajPoint : entry.getValue()){
                         double lat = trajStorage.denormalizeLat(responseTrajPoint.getPointLocation().x);
-                        double lon = trajStorage.denormalizeLat(responseTrajPoint.getPointLocation().y);
+                        double lon = trajStorage.denormalizeLon(responseTrajPoint.getPointLocation().y);
                         long ts = responseTrajPoint.getTimeInSec();
                         responseJsonMap.get(entry.getKey()).addPointToExposedPoints(new Pair<Long, Pair<Double, Double>>(ts, new Pair<Double, Double>(lat,lon)));
                     }

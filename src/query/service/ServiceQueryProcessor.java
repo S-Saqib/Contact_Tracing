@@ -158,7 +158,7 @@ public class ServiceQueryProcessor {
                                         responseJsonMap.put(checkId, new CTQResultTrajData());
                                         for (TrajPoint responseTrajPoint : traj.getPointList()){
                                             double lat = trajStorage.denormalizeLat(responseTrajPoint.getPointLocation().x);
-                                            double lon = trajStorage.denormalizeLat(responseTrajPoint.getPointLocation().y);
+                                            double lon = trajStorage.denormalizeLon(responseTrajPoint.getPointLocation().y);
                                             long ts = responseTrajPoint.getTimeInSec();
                                             responseJsonMap.get(checkId).addPointToAllPoints(new Pair<Long, Pair<Double, Double>>(ts, new Pair<Double, Double>(lat,lon)));
                                         }
