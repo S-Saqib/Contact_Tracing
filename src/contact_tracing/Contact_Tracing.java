@@ -60,6 +60,7 @@ public class Contact_Tracing {
         int fetchSize = 10000;    // small during dev, larger during run
         int numOfRows = 200;    // small during dev, removed during run
         int commitAfterTrajs = 10000;    // small during dev, larger during run
+        int useInMemoryQNodePointsMap = 1;
         
         String hyperparamFilePath = "../hyperparam.txt";
         File hyperparamFile = new File(hyperparamFilePath);
@@ -77,6 +78,7 @@ public class Contact_Tracing {
             fetchSize = Integer.parseInt(br.readLine());
             numOfRows = Integer.parseInt(br.readLine());
             commitAfterTrajs = Integer.parseInt(br.readLine());
+            useInMemoryQNodePointsMap = Integer.parseInt(br.readLine());
             
             System.out.println("Loaded hyper parameters from text file");
         }
@@ -86,7 +88,7 @@ public class Contact_Tracing {
         
         long fromTime = System.nanoTime();
         // create an object of TrajStorage to imitate database functionalities
-        TrajStorage trajStorage = new TrajStorage(trajTableName, fetchSize, dbLocation);
+        TrajStorage trajStorage = new TrajStorage(trajTableName, fetchSize, dbLocation, useInMemoryQNodePointsMap);
         
         TQIndex quadTrajTree = new TQIndex(trajStorage, dbLocation, trajTableName, fetchSize, numOfRows, commitAfterTrajs,
                                             qNodePointCapacity, timeWindowInSec, rTreeBlockTrajCapacity);

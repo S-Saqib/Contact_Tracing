@@ -83,7 +83,7 @@ public class TQIndex {
         quadTree = new QuadTree(trajStorage, 0.0, 0.0, 100.0, 100.0, minTimeInSec, qNodePointCapacity, timeWindowInSec);
         
         // now read data in chunks and build the first level quadtree
-        
+        System.out.println("And now it begins...");
         long fromTime = System.currentTimeMillis();
         // String normalizedPointQuery = "SELECT anonymous_id, (point).lat, (point).lng, (point).ts FROM raw_data where ts::date = ?";
         
@@ -94,14 +94,18 @@ public class TQIndex {
         
         
         // resetting if anything from previous run exists
-        String resetBlockIdQuery = "update " + trajTableName + " set rtree_block_id = -1";
+        String resetBlockIdQuery = "update " + trajTableName + " set rtree_block_id = -1 where rtree_block_id <> -1";
         PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(resetBlockIdQuery);
         pstmt.executeUpdate();
         
-        final String indexName = "rtree_block_id_" + trajTableName + "_idx";
+        String indexName = "rtree_block_id_" + trajTableName + "_idx";
         String dropIdxQuery = "DROP INDEX if exists " + indexName;
         pstmt = dbInterface.getConnection().prepareStatement(dropIdxQuery);
         pstmt.execute();
+        
+        String deleteQNodePointMapQuery = "delete from qnode_to_point_map"; // residual data deletion if any run ends abruptly
+        pstmt = dbInterface.getConnection().prepareStatement(deleteQNodePointMapQuery);
+        pstmt.executeUpdate();
         
         dbInterface.commit();
         long toTime = System.currentTimeMillis();
@@ -216,21 +220,21 @@ public class TQIndex {
             trajStorage.setTrajIdToDiskBlockIdMap(rTree.getTrajectoryToLeafMapping());
             trajStorage.setDiskBlockIdToTrajIdListMap();
             
-            toTime = System.currentTimeMillis();
-            System.out.println("Disk blocks tagged to trajs in db table, time : " + (toTime-fromTime)/1000 + " seconds");
-            
             // assigning block no. to qNode leaves
             quadTree.tagDiskBlockIdsToNodes(quadTree.getRootNode());
+            
+            // removing redundant temporary information
+            trajStorage.clearQNodeToPointListMap();
+            toTime = System.currentTimeMillis();
+            System.out.println("Qnode to points map db table emptied, time : " + (toTime-fromTime)/1000 + " seconds");
+            
+            trajStorage.setDiskBlockIdInDbTable();
+            toTime = System.currentTimeMillis();
+            System.out.println("Disk blocks tagged to trajs in db table, time : " + (toTime-fromTime)/1000 + " seconds");
             
             trajStorage.clusterTrajData();
             toTime = System.currentTimeMillis();
             System.out.println("Table containting block id and trajectory data clustered, time : " + (toTime-fromTime)/1000 + " seconds");
-            
-            // removing redundant temporary information
-            trajStorage.clearQNodeToPointListMap();
-            
-            toTime = System.currentTimeMillis();
-            System.out.println("Qnode to points map db table emptied, time : " + (toTime-fromTime)/1000 + " seconds");
         }
         trajStorage.getDbInterface().commit();
         

@@ -34,6 +34,7 @@ public class TrajStorage {
     private HashMap<String, Integer> trajIdToDiskBlockIdMap;    // in memory
     private final HashMap<Integer, ArrayList<String>> diskBlockIdToTrajIdListMap; // in memory
     private ArrayList<String> []pointWiseTrajIdList;    // for query traj selection
+    private HashMap<Node, ArrayList<Point>> tempQNodeToPointListMap;
     
     // data related stats required at different places
     private final double latCoeff, latConst, lonCoeff, lonConst, maxLat, maxLon, minLat, minLon;
@@ -42,8 +43,9 @@ public class TrajStorage {
     private final DbInterface dbInterface;
     private final String trajTableName;
     private final int fetchSize;
+    private final int useInMemoryQNodePointsMap;
     
-    public TrajStorage(String trajTableName, int fetchSize, String dbLocation) throws SQLException {
+    public TrajStorage(String trajTableName, int fetchSize, String dbLocation, int useInMemoryQNodePointsMap) throws SQLException {
         this.trajData = new HashMap<String, Trajectory>();
         this.transformedTrajData = new HashMap<String, TransformedTrajectory>();
         this.diskBlockIdToTrajIdListMap = new HashMap<Integer, ArrayList<String>>();
@@ -54,6 +56,9 @@ public class TrajStorage {
         
         this.trajTableName = trajTableName;
         this.fetchSize = fetchSize;
+        
+        this.useInMemoryQNodePointsMap = useInMemoryQNodePointsMap;
+        this.tempQNodeToPointListMap = new HashMap<Node, ArrayList<Point>>();
         
         String statsQuery = "SELECT max(lat), max(lng), min(lat), min(lng), extract (epoch from min(ts)) FROM raw_data";
         PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(statsQuery);
@@ -199,101 +204,126 @@ public class TrajStorage {
     }
         
     public ArrayList<Point> getPointsFromQNode(Node qNode) throws SQLException{
-        // SQL: select points from qnode_to_point_map where node = row(0, 0, 50, 50)::qnode;
-        String qNodePointFetchQuery = "select points, traj_ids from qnode_to_point_map where node = row(?, ?, ?, ?)::qnode";
-        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointFetchQuery);
+        if (useInMemoryQNodePointsMap == 0){
+            // SQL: select points from qnode_to_point_map where node = row(0, 0, 50, 50)::qnode;
+            String qNodePointFetchQuery = "select points, traj_ids from qnode_to_point_map where node = row(?, ?, ?, ?)::qnode";
+            PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointFetchQuery);
 
-        pstmt.setDouble(1, qNode.getX());
-        pstmt.setDouble(2, qNode.getY());
-        pstmt.setDouble(3, qNode.getW());
-        pstmt.setDouble(4, qNode.getH());
+            pstmt.setDouble(1, qNode.getX());
+            pstmt.setDouble(2, qNode.getY());
+            pstmt.setDouble(3, qNode.getW());
+            pstmt.setDouble(4, qNode.getH());
 
-        ArrayList<Point> qNodePointList = new ArrayList<Point>();
+            ArrayList<Point> qNodePointList = new ArrayList<Point>();
 
-        ResultSet rs = pstmt.executeQuery();
-        while (rs.next()){
-            Array pointArray = rs.getArray(1);
-            Object[] pointList = (Object[])pointArray.getArray();
-            Array trajIdArray = rs.getArray(2);
-            Object[] trajIdList = (Object[])trajIdArray.getArray();
-            int curTrajIndex = 0;
-            for(Object ptObj : pointList){
-                Point point = new Point(ptObj, trajIdList[curTrajIndex++]);
-                qNodePointList.add(point);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()){
+                Array pointArray = rs.getArray(1);
+                Object[] pointList = (Object[])pointArray.getArray();
+                Array trajIdArray = rs.getArray(2);
+                Object[] trajIdList = (Object[])trajIdArray.getArray();
+                int curTrajIndex = 0;
+                for(Object ptObj : pointList){
+                    Point point = new Point(ptObj, trajIdList[curTrajIndex++]);
+                    qNodePointList.add(point);
+                }
             }
-        }
 
-        if (qNodePointList.size() == 0){
-            System.out.println("Something went wrong while retrieving point list of qnode " + qNode);
+            if (qNodePointList.size() == 0){
+                System.out.println("Something went wrong while retrieving point list of qnode " + qNode);
+            }
+            return qNodePointList;
         }
-        return qNodePointList;
+        else{
+            if (tempQNodeToPointListMap.containsKey(qNode)){
+                return tempQNodeToPointListMap.get(qNode);
+            }
+            return null;
+        }
     }
     
     public void addPointToQNode(Node qNode, Point point) throws SQLException{
-        String qNodePointMapNodeInsQuery = "insert into qnode_to_point_map (node) values (row(?, ?, ?, ?)) on conflict do nothing;";
-        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointMapNodeInsQuery);
+        if (useInMemoryQNodePointsMap == 0){
+            String qNodePointMapNodeInsQuery = "insert into qnode_to_point_map (node) values (row(?, ?, ?, ?)) on conflict do nothing;";
+            PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointMapNodeInsQuery);
 
-        pstmt.setDouble(1, qNode.getX());
-        pstmt.setDouble(2, qNode.getY());
-        pstmt.setDouble(3, qNode.getW());
-        pstmt.setDouble(4, qNode.getH());
+            pstmt.setDouble(1, qNode.getX());
+            pstmt.setDouble(2, qNode.getY());
+            pstmt.setDouble(3, qNode.getW());
+            pstmt.setDouble(4, qNode.getH());
 
-        int affectedRows = pstmt.executeUpdate();
+            int affectedRows = pstmt.executeUpdate();
 
-        if (affectedRows > 1){
-            System.out.println("Something went wrong while inserting qnode " + qNode);
-            System.out.println(affectedRows + " Rows affected");
+            if (affectedRows > 1){
+                System.out.println("Something went wrong while inserting qnode " + qNode);
+                System.out.println(affectedRows + " Rows affected");
+            }
+
+            String qNodePointMapPointInsQuery = "update qnode_to_point_map set points = array_append(points,row(?, ?, ?)::trajectory_point),"
+                                                + " traj_ids = array_append(traj_ids,?) where node = row(?, ?, ?, ?)::qnode;";
+            pstmt = dbInterface.getConnection().prepareStatement(qNodePointMapPointInsQuery);
+
+            pstmt.setDouble(1, point.getX());
+            pstmt.setDouble(2, point.getY());
+            pstmt.setLong(3, point.getTimeInSec());
+            pstmt.setString(4, (String)point.getTraj_id());
+
+            pstmt.setDouble(5, qNode.getX());
+            pstmt.setDouble(6, qNode.getY());
+            pstmt.setDouble(7, qNode.getW());
+            pstmt.setDouble(8, qNode.getH());
+
+            affectedRows = pstmt.executeUpdate();
+
+            if (affectedRows != 1){
+                System.out.println("Something went wrong while inserting point " + point + " at " + qNode);
+            }
         }
-        
-        // tempQNodeToPointListMap.get(qNode).add(point);
-        
-        String qNodePointMapPointInsQuery = "update qnode_to_point_map set points = array_append(points,row(?, ?, ?)::trajectory_point),"
-                                            + " traj_ids = array_append(traj_ids,?) where node = row(?, ?, ?, ?)::qnode;";
-        pstmt = dbInterface.getConnection().prepareStatement(qNodePointMapPointInsQuery);
-        
-        pstmt.setDouble(1, point.getX());
-        pstmt.setDouble(2, point.getY());
-        pstmt.setLong(3, point.getTimeInSec());
-        pstmt.setString(4, (String)point.getTraj_id());
-        
-        pstmt.setDouble(5, qNode.getX());
-        pstmt.setDouble(6, qNode.getY());
-        pstmt.setDouble(7, qNode.getW());
-        pstmt.setDouble(8, qNode.getH());
-        
-        affectedRows = pstmt.executeUpdate();
-        
-        if (affectedRows != 1){
-            System.out.println("Something went wrong while inserting point " + point + " at " + qNode);
+        else{
+            if (!tempQNodeToPointListMap.containsKey(qNode)){
+                tempQNodeToPointListMap.put(qNode, new ArrayList<Point>());
+            }
+            tempQNodeToPointListMap.get(qNode).add(point);
         }
     }
     
     // a node should be removed after it is no longer leaf (becomes pointer)
-    public void removePointListFromQNode(Node qNode) throws SQLException{            
-        // SQL: delete from qnode_to_point_map where node = row(50, 75, 25, 25)::qnode;
-        String qNodePointDeleteQuery = "delete from qnode_to_point_map where node = row(?, ?, ?, ?)::qnode";
-        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointDeleteQuery);
+    public void removePointListFromQNode(Node qNode) throws SQLException{
+        if (useInMemoryQNodePointsMap == 0){
+            // SQL: delete from qnode_to_point_map where node = row(50, 75, 25, 25)::qnode;
+            String qNodePointDeleteQuery = "delete from qnode_to_point_map where node = row(?, ?, ?, ?)::qnode";
+            PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointDeleteQuery);
 
-        pstmt.setDouble(1, qNode.getX());
-        pstmt.setDouble(2, qNode.getY());
-        pstmt.setDouble(3, qNode.getW());
-        pstmt.setDouble(4, qNode.getH());
+            pstmt.setDouble(1, qNode.getX());
+            pstmt.setDouble(2, qNode.getY());
+            pstmt.setDouble(3, qNode.getW());
+            pstmt.setDouble(4, qNode.getH());
 
-        int affectedRows = pstmt.executeUpdate();
+            int affectedRows = pstmt.executeUpdate();
 
-        if (affectedRows != 1){
-            System.out.println("Something went wrong while deleting row of qnode " + qNode);
+            if (affectedRows != 1){
+                System.out.println("Something went wrong while deleting row of qnode " + qNode);
+            }
+        }
+        else{
+            if (tempQNodeToPointListMap.containsKey(qNode)){
+                tempQNodeToPointListMap.remove(qNode);
+            }
         }
     }
     
     public void clearQNodeToPointListMap() throws SQLException{
-        // tempQNodeToPointListMap.clear();
-        String qNodePointClearQuery = "delete from qnode_to_point_map";
-        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointClearQuery);
-        int affectedRows = pstmt.executeUpdate();
+        if (useInMemoryQNodePointsMap == 0){
+            String qNodePointClearQuery = "delete from qnode_to_point_map";
+            PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(qNodePointClearQuery);
+            int affectedRows = pstmt.executeUpdate();
 
-        if (affectedRows == 0){
-            System.out.println("Something went wrong while deleting all rows of qnode point map table");
+            if (affectedRows == 0){
+                System.out.println("Something went wrong while deleting all rows of qnode point map table");
+            }
+        }
+        else{
+            tempQNodeToPointListMap.clear();
         }
     }
     
@@ -337,7 +367,7 @@ public class TrajStorage {
         this.trajIdToDiskBlockIdMap = trajToDiskBlockIdMap;
     }
     
-    public void setDiskBlockIdToTrajIdListMap() throws SQLException{
+    public void setDiskBlockIdToTrajIdListMap(){
         for (Map.Entry<String, Integer> entry : trajIdToDiskBlockIdMap.entrySet()) {
             String trajId = entry.getKey();
             Integer blockId = entry.getValue();
@@ -345,34 +375,43 @@ public class TrajStorage {
                 diskBlockIdToTrajIdListMap.put(blockId, new ArrayList<String>());
             }
             diskBlockIdToTrajIdListMap.get(blockId).add(trajId);
-            
+        }
+    }
+    
+    public void setDiskBlockIdInDbTable() throws SQLException{
+        for (Map.Entry<Integer, ArrayList<String>> entry : diskBlockIdToTrajIdListMap.entrySet()) {
             // update normalized trajectory table column in database
-            //SQL: update normalized_trajectory_day_one set rtree_block_id = 0 where anonymous_id = 'AAH03JAAQAAAO9VAA4'
-            String updateDiskBlockQuery = "update " + trajTableName + " set rtree_block_id = ? where anonymous_id = ?";
+            //SQL: update normalized_trajectory_day_one set rtree_block_id = 0 where anonymous_id in ('AAH03JAAQAAAO9VAA4', 'AAH03JAAQAAAO9VAA4')
+            if (entry.getValue() == null || entry.getValue().size() == 0) continue;
+            String updateDiskBlockQuery = "update " + trajTableName + " set rtree_block_id = ? where anonymous_id in (?";
+            for (int i=1; i<entry.getValue().size(); i++) updateDiskBlockQuery += ",?";
+            updateDiskBlockQuery += ")";
             PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(updateDiskBlockQuery);
-
+            Integer blockId = entry.getKey();
             pstmt.setInt(1, blockId);
-            pstmt.setString(2, trajId);
-            
-            int affectedRows = pstmt.executeUpdate();
-
-            if (affectedRows != 1){
-                System.out.println("Something went wrong while assigning disk block id to trajectory " + trajId);
+            for (int i=0; i<entry.getValue().size(); i++){
+                String trajId = entry.getValue().get(i);
+                pstmt.setString(2+i, trajId);
             }
-            
+            int affectedRows = pstmt.executeUpdate();
+            if (affectedRows != entry.getValue().size()){
+                System.out.println("Something went wrong while assigning disk block id to trajectories " + entry.getValue());
+            }
         }
     }
     
     public void clusterTrajData() throws SQLException{
-        final String indexName = "rtree_block_id_" + trajTableName + "_idx";
-                
-        String indexQuery = "create index if not exists " + indexName + " on " + trajTableName + " (rtree_block_id)";
-        PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(indexQuery);
-        pstmt.execute();
-        
-        String clusterQuery = "cluster " + trajTableName + " using " + indexName;
-        pstmt = dbInterface.getConnection().prepareStatement(clusterQuery);
-        pstmt.execute();
+        if (useInMemoryQNodePointsMap == 0){
+            final String indexName = "rtree_block_id_" + trajTableName + "_idx";
+
+            String indexQuery = "create index if not exists " + indexName + " on " + trajTableName + " (rtree_block_id)";
+            PreparedStatement pstmt = dbInterface.getConnection().prepareStatement(indexQuery);
+            pstmt.execute();
+
+            String clusterQuery = "cluster " + trajTableName + " using " + indexName;
+            pstmt = dbInterface.getConnection().prepareStatement(clusterQuery);
+            pstmt.execute();
+        }
     }
     
     public Object getDiskBlockIdByTrajId(String id){
