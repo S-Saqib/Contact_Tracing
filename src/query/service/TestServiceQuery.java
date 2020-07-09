@@ -103,12 +103,13 @@ public class TestServiceQuery {
         timeIO.add(processQuery.getBlocksAccessed()*1.0);
         timeIO.add(infectedContacts.size()*1.0);
         System.out.println(infectedContacts.size() + " users infected, runtime = " + timeIO.get(0) + " seconds, blocks accessed = " + timeIO.get(1));
+        /*
         System.out.println("Infected Users:");
         for (Map.Entry<String, TreeSet<TrajPoint>> entry : infectedContacts.entrySet()){
             System.out.print(entry.getKey() + " ");
         }
         System.out.println("");
-        
+        */
         return responseJsonMap;
     }
 }

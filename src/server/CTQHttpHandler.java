@@ -78,7 +78,7 @@ public class CTQHttpHandler implements HttpHandler {
         
         Gson gson = new Gson();
         String responseData = gson.toJson(ctqResult);
-        System.out.println(responseData);
+        System.out.println("Json response data length = " + responseData.length());
         
         httpExchange.sendResponseHeaders(200, responseData.length());
         OutputStream outputStream = httpExchange.getResponseBody();
