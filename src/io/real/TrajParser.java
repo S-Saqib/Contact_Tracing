@@ -114,10 +114,11 @@ public class TrajParser {
         }
         br.close();
         
+        /*
         // location values are normalized in [0, 100] range
         TrajNormalizer trajNormalizer = new TrajNormalizer();
         allTrajectories = trajNormalizer.normalize(allTrajectories, minLon, minLat, maxLon, maxLat);
-        
+        */
         // the denormalizing variables are updated
         latCoeff = (maxLat/100.0-minLat/100.0);
         latConst = minLat;
